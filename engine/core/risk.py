@@ -17,6 +17,21 @@ def round_tick(price: float, tick: float = 0.05) -> float:
     return round(round(price / tick) * tick, 2)
 
 
+def calculate_position_size(
+    symbol: str,
+    entry_price: float,
+    stop_loss: float,
+    adv_cr: float = 10.0,
+    product: str = "MIS",
+) -> Tuple[int, float]:
+    """Helper for sizing calculation."""
+    rm = RiskManager()
+    qty, risk_inr, skip = rm.calculate_quantity(entry_price, stop_loss, product=product, adv_cr=adv_cr)
+    if skip:
+        return 0, 0.0
+    return qty, risk_inr
+
+
 def avoid_round_numbers(stop_price: float, side: str = "LONG") -> float:
     """
     Spec 03 §3 rule 3:
