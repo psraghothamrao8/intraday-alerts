@@ -73,6 +73,8 @@ class AlertBotEngine:
         self.universe_map: Dict[str, dict] = {}
         self.open_trades: Dict[str, Trade] = {}
         self.last_publish_time: float = 0.0
+        self.last_tick_time: Optional[datetime] = None
+        self.feed_down_alerted: bool = False
 
     async def initialize(self, target_date: Optional[date] = None) -> None:
         """Initialize engine, universe reference data, strategies, and resume open trades."""
@@ -197,6 +199,9 @@ class AlertBotEngine:
 
     def step_tick(self, tick: Tick) -> List[ExitEvent]:
         """Process incoming tick, evaluate safety stop, and update candles."""
+        self.last_tick_time = tick.timestamp
+        self.feed_down_alerted = False
+
         exits: List[ExitEvent] = []
         sym = tick.symbol
 
@@ -215,6 +220,28 @@ class AlertBotEngine:
             exits.extend(candle_exits)
 
         return exits
+
+    def check_feed_watchdog(self, now: Optional[datetime] = None) -> bool:
+        """
+        Check if market data feed has stalled during market hours (spec 07 §9).
+        If no ticks received for >= 60 seconds during 09:15-15:30:
+          dispatches ALERT notification and returns True.
+        """
+        cur_now = now or self.clock.now()
+        t = cur_now.time()
+        if time(9, 15) <= t <= time(15, 30):
+            if self.last_tick_time is not None:
+                elapsed = (cur_now - self.last_tick_time).total_seconds()
+                if elapsed >= 60.0:
+                    if not self.feed_down_alerted:
+                        logger.error(f"Feed down watchdog tripped: no ticks for {elapsed:.0f}s. Sending ALERT.")
+                        self.dispatcher.dispatch_alert(
+                            "feed_down",
+                            f"Feed down: no ticks for {int(elapsed)}s during market hours. Attempting auto-reconnect..."
+                        )
+                        self.feed_down_alerted = True
+                    return True
+        return False
 
     def step_candle_1m(self, candle: Candle) -> List[ExitEvent]:
         """Process completed 1-minute candle, check 5-minute aggregation."""
@@ -250,7 +277,8 @@ class AlertBotEngine:
         return exits
 
     def step_clock(self, now: datetime, current_prices: Optional[Dict[str, float]] = None) -> List[ExitEvent]:
-        """Process clock update, evaluate time exits."""
+        """Process clock update, evaluate time exits and feed watchdog."""
+        self.check_feed_watchdog(now)
         exits: List[ExitEvent] = []
         prices = current_prices or {}
 

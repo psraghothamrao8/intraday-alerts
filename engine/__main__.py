@@ -216,6 +216,9 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    from engine.logging_config import setup_logging
+    setup_logging()
+
     if args.command == "vapid-gen":
         cli_vapid_gen()
     elif args.command == "add-device":
@@ -235,7 +238,10 @@ def main() -> None:
     elif args.command == "run":
         cli_run()
     elif args.command == "doctor":
-        print(f"Command '{args.command}' is part of hardening build task 9.")
+        from engine.doctor import run_doctor
+        success = run_doctor()
+        if not success:
+            sys.exit(1)
     else:
         parser.print_help()
 
