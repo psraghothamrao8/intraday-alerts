@@ -103,9 +103,11 @@ def cli_notify_test() -> None:
     """Send test notification via Web Push and Telegram."""
     init_db()
     dispatcher = get_dispatcher()
+    import time
+    test_id = f"TEST-{int(time.time())}"
 
     sample_trade = {
-        "id": "TEST-NOTIFY-001",
+        "id": test_id,
         "strategy": "S1",
         "symbol": "KPITTECH",
         "side": "LONG",
