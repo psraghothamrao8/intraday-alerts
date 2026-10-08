@@ -1,10 +1,17 @@
-"""
-Strategy S1: Results-Hour Reader.
-Validates quarterly extractions, computes derived metrics, and scores filings per spec 02 §S1.5-S1.9.
-"""
+import json
 import logging
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
+import pandas as pd
+
+from engine.config import get_settings
+from engine.core.exits import compute_news_exits
+from engine.core.models import Signal, Candle, Tick
+from engine.core.risk import round_tick
+from engine.core.state import save_fundamental
+from engine.data.pdf_fetch import PDFFetcher
+from engine.llm.reader import LLMReader
 from engine.llm.schemas import Period, ResultsExtraction, Statement
+from engine.strategies.base import Strategy
 
 logger = logging.getLogger(__name__)
 
@@ -259,3 +266,140 @@ def format_s1_why(
         parts.append(f"margin {round(margin_change_bps):+d}bps")
 
     return f"Q2 results: {' · '.join(parts)} ({basis})"
+
+
+class S1ResultsStrategy(Strategy):
+    """S1 Strategy: Results-Hour Reader."""
+
+    def __init__(self):
+        super().__init__("S1")
+        self.settings = get_settings()
+        self.reader = LLMReader()
+        self.universe_map: Dict[str, dict] = {}
+        self.processed_filings: Set[str] = set()
+
+    def on_start(self, universe_df: pd.DataFrame) -> None:
+        self.universe_map = {row["symbol"]: row.to_dict() for _, row in universe_df.iterrows()}
+
+    async def on_filing(self, filing: Dict[str, Any], current_price: Optional[float] = None) -> Optional[Signal]:
+        if filing.get("trigger_group") != "results":
+            return None
+
+        fid = filing.get("id", "")
+        if fid in self.processed_filings:
+            return None
+        self.processed_filings.add(fid)
+
+        sym = filing.get("symbol", "")
+        u_row = self.universe_map.get(sym)
+        if not u_row:
+            return None
+
+        if not u_row.get("mis_allowed", True):
+            return None
+
+        mcap = float(u_row.get("mcap_cr", 0.0) or 0.0)
+        adv = float(u_row.get("adv_cr", 0.0) or 0.0)
+        if mcap < 500.0 or mcap > 15000.0 or adv < 3.0:
+            return None
+
+        if u_row.get("asm_stage", 0) >= 2 or u_row.get("gsm", False):
+            return None
+
+        url = filing.get("pdf_url")
+        ext: Optional[ResultsExtraction] = None
+        if filing.get("extraction_json"):
+            try:
+                ext = ResultsExtraction.model_validate_json(filing["extraction_json"])
+            except Exception:
+                ext = None
+
+        if not ext:
+            if not url:
+                return None
+            try:
+                pdf_bytes, sha256 = PDFFetcher.download(url, is_bse="bseindia" in url)
+                mode, text_content, pdf_b64 = PDFFetcher.extract_content(pdf_bytes)
+            except Exception as e:
+                logger.warning(f"S1 PDF fetch failed for {sym}: {e}")
+                return None
+
+            ext = await self.reader.extract_results(
+                symbol=sym,
+                company_name=filing.get("company", sym),
+                subject=filing.get("subject", "Financial Results"),
+                text_content=text_content,
+                pdf_base64=pdf_b64,
+            )
+            if not ext:
+                return None
+
+        is_valid, reason, stmt, basis, check_b = validate_results_extraction(ext)
+        if not is_valid or not stmt:
+            return None
+
+        cur, yago = stmt.current_qtr, stmt.year_ago_qtr
+        derived = calculate_derived_numbers(stmt)
+        score = score_results(derived, ext.auditor_modified_opinion, ext.going_concern_doubt)
+
+        # Save to fundamentals table
+        try:
+            save_fundamental(
+                symbol=sym,
+                period_end=ext.period_end or "2026-09-30",
+                basis=basis,
+                unit=ext.unit,
+                json_data=ext.model_dump_json(),
+                source_url=url,
+            )
+        except Exception as e:
+            logger.warning(f"Could not save fundamental for {sym}: {e}")
+
+        # Check score threshold (>= +6 Long, <= -6 Short)
+        if score >= 6:
+            side = "LONG"
+        elif score <= -6:
+            side = "SHORT"
+        else:
+            return None
+
+        # Price and levels
+        ref_price = current_price if current_price is not None else float(u_row.get("prev_close", 100.0))
+        entry_price = round_tick(ref_price * 1.003 if side == "LONG" else ref_price * 0.997)
+
+        atr14 = float(u_row.get("atr14", 5.0) or 5.0)
+        is_fno = bool(u_row.get("fno", False))
+
+        thesis_level, safety_stop, profit_lock, exit_by = compute_news_exits(
+            symbol=sym,
+            side=side,
+            entry_price=entry_price,
+            ref_price=ref_price,
+            atr14=atr14,
+            is_fno=is_fno,
+        )
+
+        strength = calculate_s1_strength(score, side, move_since_filing=0.0, adv_cr=adv, check_b_warning=check_b)
+        why = format_s1_why(derived.get("rev_yoy", 0.0), cur.net_profit, yago.net_profit, derived.get("margin_change_bps"), basis=basis)
+
+        return Signal(
+            strategy="S1",
+            symbol=sym,
+            side=side,
+            product="MIS",
+            ref_price=ref_price,
+            entry_price=entry_price,
+            valid_till="3 min",
+            thesis_tf="5m",
+            thesis_dir="below" if side == "LONG" else "above",
+            thesis_level=thesis_level,
+            safety_stop=safety_stop,
+            target=None,
+            exit_by=exit_by,
+            raw_score=float(score),
+            provisional_strength=strength,
+            why=why,
+            source_url=url,
+            profit_lock_rule=profit_lock,
+            meta={"adv_cr": adv, "mcap_cr": mcap, "score": score, "basis": basis},
+        )

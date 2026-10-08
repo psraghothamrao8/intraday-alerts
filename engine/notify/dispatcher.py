@@ -26,8 +26,9 @@ logger = logging.getLogger(__name__)
 class NotificationDispatcher:
     """Dispatches notifications exactly once across active Web Push devices and Telegram."""
 
-    def __init__(self, conn: Optional[sqlite3.Connection] = None):
+    def __init__(self, conn: Optional[sqlite3.Connection] = None, notify_file: Optional[str] = None):
         self.conn = conn
+        self.notify_file = notify_file
 
     def dispatch_trade_entry(self, trade: Dict[str, Any]) -> bool:
         """
@@ -92,6 +93,21 @@ class NotificationDispatcher:
         if not inserted:
             logger.info(f"Notification {notif_id} was already handled; skipping duplicate delivery.")
             return False
+
+        # If file output is configured, write to file and skip network delivery
+        if self.notify_file:
+            with open(self.notify_file, "a", encoding="utf-8") as f_out:
+                f_out.write(json.dumps({
+                    "notif_id": notif_id,
+                    "trade_id": trade_id,
+                    "kind": kind,
+                    "title": title,
+                    "body": body,
+                    "payload": payload,
+                    "timestamp": get_clock().now().isoformat(),
+                }, ensure_ascii=False) + "\n")
+            update_notification_status(notif_id, webpush_status="file_logged", telegram_status="file_logged", conn=conn)
+            return True
 
         settings = get_settings()
         devices = get_active_devices(conn)

@@ -161,6 +161,32 @@ def cli_filings(replay_date_str: Optional[str] = None) -> None:
     print(f"\n[SUCCESS] Replayed {len(res)} filings for {target_d}.")
 
 
+def cli_replay(date_str: Optional[str] = None, notify_mode: str = "webpush", speed: float = 60.0) -> None:
+    import asyncio
+    from datetime import date
+    from pathlib import Path
+    from engine.core.clock import FakeClock
+    from engine.core.engine import AlertBotEngine
+
+    target_d = date.fromisoformat(date_str) if date_str else date.today()
+    notify_file = "data/replay_notifications.jsonl" if notify_mode == "file" else None
+    if notify_file:
+        Path(notify_file).parent.mkdir(parents=True, exist_ok=True)
+        Path(notify_file).unlink(missing_ok=True)
+
+    fake_clock = FakeClock()
+    engine = AlertBotEngine(clock=fake_clock, notify_file=notify_file, is_replay=True)
+    asyncio.run(engine.run_replay(target_d, speed=speed))
+
+
+def cli_run() -> None:
+    import asyncio
+    from engine.core.engine import AlertBotEngine
+
+    engine = AlertBotEngine(is_replay=False)
+    asyncio.run(engine.run_live())
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Intraday Alert Bot Engine CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -174,7 +200,6 @@ def main() -> None:
     subparsers.add_parser("publish-test", help="Publish test state to GitHub Pages data branch")
     subparsers.add_parser("doctor", help="Check system health, credentials, and API reachability")
 
-    # Placeholders for future tasks
     subparsers.add_parser("run", help="Run the live intraday trading engine")
     replay_parser = subparsers.add_parser("replay", help="Replay past trading sessions")
     replay_parser.add_argument("--date", help="Date to replay (YYYY-MM-DD)")
@@ -205,11 +230,16 @@ def main() -> None:
         cli_collect_eod(args.backfill)
     elif args.command == "filings":
         cli_filings(args.replay)
-    elif args.command in ("run", "replay", "doctor"):
-        print(f"Command '{args.command}' is part of subsequent build tasks.")
+    elif args.command == "replay":
+        cli_replay(args.date, notify_mode=args.notify)
+    elif args.command == "run":
+        cli_run()
+    elif args.command == "doctor":
+        print(f"Command '{args.command}' is part of hardening build task 9.")
     else:
         parser.print_help()
 
 
 if __name__ == "__main__":
     main()
+

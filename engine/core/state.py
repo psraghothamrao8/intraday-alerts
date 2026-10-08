@@ -287,8 +287,24 @@ def save_trade(trade: Dict[str, Any], conn: Optional[sqlite3.Connection] = None)
         })
 
 
+def update_trade(trade_id: str, fields: Dict[str, Any], conn: Optional[sqlite3.Connection] = None) -> None:
+    c = conn or get_connection()
+    if not fields:
+        return
+    set_clauses = []
+    values = []
+    for k, v in fields.items():
+        set_clauses.append(f"{k} = ?")
+        values.append(v)
+    values.append(trade_id)
+    sql = f"UPDATE trades SET {', '.join(set_clauses)} WHERE id = ?"
+    with c:
+        c.execute(sql, values)
+
+
 def get_trade(trade_id: str, conn: Optional[sqlite3.Connection] = None) -> Optional[Dict[str, Any]]:
     c = conn or get_connection()
+    c.row_factory = sqlite3.Row
     row = c.execute("SELECT * FROM trades WHERE id = ?", (trade_id,)).fetchone()
     if not row:
         return None
@@ -310,13 +326,13 @@ def get_trade(trade_id: str, conn: Optional[sqlite3.Connection] = None) -> Optio
 def get_open_trades(conn: Optional[sqlite3.Connection] = None) -> List[Dict[str, Any]]:
     c = conn or get_connection()
     rows = c.execute("SELECT id FROM trades WHERE status = 'OPEN'").fetchall()
-    return [get_trade(r["id"], c) for r in rows if r["id"]]
+    return [get_trade(r[0], c) for r in rows if r[0]]
 
 
 def get_today_trades(date_str: str, conn: Optional[sqlite3.Connection] = None) -> List[Dict[str, Any]]:
     c = conn or get_connection()
     rows = c.execute("SELECT id FROM trades WHERE signal_time LIKE ? ORDER BY signal_time ASC", (f"{date_str}%",)).fetchall()
-    return [get_trade(r["id"], c) for r in rows if r["id"]]
+    return [get_trade(r[0], c) for r in rows if r[0]]
 
 
 def get_history_trades(limit_days: int = 30, conn: Optional[sqlite3.Connection] = None) -> List[Dict[str, Any]]:
@@ -327,7 +343,34 @@ def get_history_trades(limit_days: int = 30, conn: Optional[sqlite3.Connection] 
         ORDER BY signal_time DESC
         LIMIT 1000
     """).fetchall()
-    return [get_trade(r["id"], c) for r in rows if r["id"]]
+    return [get_trade(r[0], c) for r in rows if r[0]]
+
+
+# --- Fundamentals DAO ---
+
+def save_fundamental(
+    symbol: str,
+    period_end: str,
+    basis: str,
+    unit: str,
+    json_data: str,
+    source_url: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None
+) -> None:
+    c = conn or get_connection()
+    now_str = get_clock().now().isoformat()
+    with c:
+        c.execute("""
+            INSERT OR REPLACE INTO fundamentals (symbol, period_end, basis, unit, json, source_url, extracted_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (symbol, period_end, basis, unit, json_data, source_url, now_str))
+
+
+def get_fundamentals(symbol: str, conn: Optional[sqlite3.Connection] = None) -> List[Dict[str, Any]]:
+    c = conn or get_connection()
+    c.row_factory = sqlite3.Row
+    rows = c.execute("SELECT * FROM fundamentals WHERE symbol = ? ORDER BY period_end DESC", (symbol,)).fetchall()
+    return [dict(r) for r in rows]
 
 
 # --- Filings DAO ---
