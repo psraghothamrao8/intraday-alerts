@@ -1,0 +1,159 @@
+mode: paper                     # paper | live (labels only; orders are always placed by hand)
+timezone: Asia/Kolkata
+capital_inr: 500000             # your trading capital; used for sizing and the loss limits
+
+broker:
+  name: upstox                  # adapter: upstox | angel | fyers | dhan | zerodha  (use your broker)
+  login_mode: manual            # manual | auto_totp  (see spec 05 §5)
+  callback_port: 8765
+  squareoff:                    # YOUR broker's MIS auto square-off times (check them; they change)
+    fno_stocks: "15:12"         # Zerodha 15:12 · Angel 15:10 · Fyers 15:05 · Motilal/Share.Market 15:00
+    other_stocks: "15:25"       # Zerodha 15:25 · Fyers 15:20 · Share.Market 15:15
+  exit_buffer_min: 5            # every MIS trade exits this many minutes before square-off
+  entry_cutoff_min: 30          # no new MIS entries in the last N minutes before the exit time
+
+risk:
+  risk_per_trade_pct: 0.5
+  max_notional_pct_mis: 200
+  max_notional_pct_cnc: 50
+  liquidity_cap_pct_adv: 0.5
+  min_notional_inr: 5000
+  max_open_trades: 4
+  max_entries_per_day: 8
+  daily_loss_stop_pct: 2.0
+  max_consecutive_losses: 3
+  pause_if_drawdown_x_backtest: 2.0
+
+notify:
+  min_strength: 6
+  human_delay_sec: 45           # used for paper fills
+  daily_summary: false
+  webpush: { enabled: true, ttl_entry_sec: 180, ttl_exit_sec: 3600, ttl_alert_sec: 3600 }
+  telegram: { enabled: false }
+
+publish:
+  owner: "psraghothamrao8"
+  repo: "intraday-alerts"
+  data_branch: data
+  path: state.enc.json
+  min_interval_sec: 60
+  heartbeat_sec: 300
+  history_days: 30
+
+llm:
+  model: claude-opus-5-5        # or claude-haiku-5-5 (≈40× cheaper). Decide after Task 3.6
+  effort: low
+  max_pages_text: 6
+  max_pages_pdf: 8
+  timeout_sec: 60
+  max_retries: 2
+
+filings:
+  bse_poll_sec: 10
+  nse_poll_sec: 30
+  window_start: "09:15"
+  dedupe_window_min: 60
+  pdf_max_mb: 15
+
+universe:
+  min_price_inr: 50             # S2 only
+  exclude_asm_stage_gte: 2
+  exclude_gsm: true
+
+strategies:
+  s1_results:
+    enabled: true
+    mcap_cr: [500, 15000]
+    min_adv_cr: 3
+    long_score_gte: 6
+    short_score_lte: -6
+    max_move_since_filing_pct: 2.0
+    max_runup_30m_pct: 5.0
+    min_band_room_pct: 3.0
+    max_spread_pct: 0.5
+    entry_slip_pct: 0.3         # max_entry = LTP × (1 + this)
+    entry_valid_min: 3
+    exit: news                  # template in spec 03 §4.1
+
+  s2_orb:
+    enabled: true
+    min_adv_cr: 10
+    min_atr_pct: 1.0
+    min_rvol: 1.0
+    top_n: 20
+    max_or_range_atr: 0.6
+    trigger: close_1m           # close_1m | first_touch
+    max_extension_pct: 0.4
+    entry_slip_pct: 0.3
+    entry_valid_min: 2
+    entry_until: "11:00"
+    max_trades_per_day: 3
+    exit: orb                   # template in spec 03 §4.2
+
+  s3_filing_flash:
+    enabled: true
+    min_adv_cr: 2
+    order_min_materiality_pct: 10
+    order_min_mcap_pct_fallback: 5
+    buyback_min_premium_pct: 15
+    serial_announcer: { filings: 4, days: 60, strength_penalty: 2 }
+    blacklist: []               # symbols whose "orders" never show up in revenue
+    max_move_since_filing_pct: 2.0
+    max_runup_30m_pct: 5.0
+    min_band_room_pct: 3.0
+    entry_slip_pct: 0.3
+    entry_valid_min: 3
+    exit: news
+
+  s4_squareoff:
+    collect: true
+    alerts_enabled: false       # flip to true ONLY after the research gate (spec 02 §S4.3) passes
+    min_adv_cr: 5
+    minutes_fno: ["15:00", "15:05", "15:10", "15:12"]
+    minutes_other: ["15:15", "15:20", "15:25"]
+    day_move_lte_pct: -3.0
+    min_minute_drop_pct: 0.5
+    hold_min: 5
+    entry_slip_pct: 0.2
+    safety_stop_pct: 1.0
+
+exits:
+  news:
+    thesis: ref_close           # none | ref_close | ref_minus_atr | low15_close
+    thesis_buffer_atr: 0.1
+    safety_k_atr: 1.0           # recalibrated by MAE (spec 03 §5)
+    safety_min_gap_atr: 0.25    # safety stop at least this far beyond the thesis level
+    profit_lock: avwap_after_2pct   # off | avwap_after_2pct | avwap_after_1r
+    max_hold_min: null
+    target_atr: null
+  orb:
+    thesis: or_far_close        # or_far_close | or_mid_close | atr10_tick | atr25_tick
+    safety_buffer_atr: 0.25
+    profit_lock: off            # off | vwap_after_1r
+  common:
+    candle_grace_sec: 2
+    round_number_buffer_pct: 0.15
+
+costs:
+  brokerage_pct: 0.03
+  brokerage_cap_inr: 20
+  stt_sell_pct: 0.025
+  exchange_txn_pct: 0.00307
+  sebi_per_crore_inr: 10
+  stamp_buy_pct: 0.003
+  gst_pct: 18
+  slippage:                     # per side, by ADV (₹ cr): first matching row wins
+    - { adv_cr_gte: 50, pct: 0.05 }
+    - { adv_cr_gte: 10, pct: 0.10 }
+    - { adv_cr_gte: 3,  pct: 0.20 }
+    - { adv_cr_gte: 0,  pct: 0.40 }
+  news_extra_slippage_pct: 0.10 # per side, first 5 minutes after a filing
+
+fx:                             # PLACEHOLDERS: set today's rates, then update monthly (S3 foreign-currency orders)
+  USD: 88.0
+  EUR: 95.0
+  GBP: 110.0
+  AED: 24.0
+
+calendar:
+  extra_holidays: []            # add any NSE holiday the API misses, "YYYY-MM-DD"

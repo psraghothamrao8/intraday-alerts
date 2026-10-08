@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Crypto Test Vector Verification</title>
+  <script src="crypto.js"></script>
+</head>
+<body>
+  <h1>Crypto Test Vector Verification</h1>
+  <div id="result" style="font-size: 24px; font-weight: bold;">TESTING...</div>
+  <pre id="details"></pre>
+
+  <script>
+    const testVector = {
+      passphrase: "test-passphrase-vector-2026",
+      salt: "MDEyMzQ1Njc4OWFiY2RlZg==",
+      iv: "MTIzNDU2Nzg5MDEy",
+      ct: "nXYF/nb4850/oLj7/wOMFu/AI2LC7AOabhVOrpcgyrzARXZ7OovNNPzGPw9CZ7Q="
+    };
+
+    async function runTest() {
+      const resEl = document.getElementById('result');
+      const detEl = document.getElementById('details');
+      try {
+        const decrypted = await decryptState(testVector, testVector.passphrase);
+        if (decrypted && decrypted.test === "vector" && decrypted.value === 42) {
+          resEl.textContent = "PASS";
+          resEl.style.color = "green";
+          detEl.textContent = JSON.stringify(decrypted, null, 2);
+        } else {
+          resEl.textContent = "FAIL";
+          resEl.style.color = "red";
+          detEl.textContent = "Mismatched content: " + JSON.stringify(decrypted);
+        }
+      } catch (err) {
+        resEl.textContent = "FAIL: " + err.message;
+        resEl.style.color = "red";
+        detEl.textContent = err.stack;
+      }
+    }
+    runTest();
+  </script>
+</body>
+</html>

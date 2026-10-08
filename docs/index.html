@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Intraday Alerts</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="title-wrap">
+      <h1>Intraday Alerts</h1>
+    </div>
+    <div id="mode-badge" class="badge badge-paper">PAPER</div>
+  </header>
+
+  <div id="status-bar" class="status-bar">
+    <div id="status-text" class="status-indicator">⚪ Initializing...</div>
+    <div id="status-time" style="color: var(--text-muted); font-size: 0.8rem;"></div>
+  </div>
+
+  <main id="main-content">
+    <!-- Passphrase Prompt (shown if not unlocked) -->
+    <section id="lock-screen" style="display: none;">
+      <div class="trade-card" style="text-align: center; padding: 24px;">
+        <h2>Encrypted Dashboard</h2>
+        <p style="margin-bottom: 16px; color: var(--text-muted); font-size: 0.875rem;">
+          Enter your decryption passphrase to view trades and live status.
+        </p>
+        <div style="display: flex; gap: 8px; justify-content: center; max-width: 400px; margin: 0 auto;">
+          <input type="password" id="passphrase-input" placeholder="Passphrase" style="flex: 1;">
+          <button id="unlock-btn">Unlock</button>
+        </div>
+        <p id="unlock-error" style="color: var(--red); margin-top: 8px; font-size: 0.8rem; display: none;"></p>
+      </div>
+    </section>
+
+    <!-- Dashboard Content (unlocked) -->
+    <div id="dashboard-view" style="display: none;">
+      <section id="open-trades-sec">
+        <h2>Open Trades (<span id="open-count">0</span>)</h2>
+        <div id="open-trades-grid" class="cards-grid">
+          <div class="empty-state">No open positions.</div>
+        </div>
+      </section>
+
+      <section id="today-sec">
+        <h2>Today (<span id="today-pnl">0.0%</span>)</h2>
+        <div id="today-trades-table-wrap">
+          <table id="today-table">
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Side</th>
+                <th>Strat</th>
+                <th>Status</th>
+                <th>Entry</th>
+                <th>Exit</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody id="today-tbody">
+              <tr><td colspan="7" class="empty-state">No trades today yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="scoreboard-sec">
+        <h2>Scoreboard (30 Days)</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Strategy</th>
+              <th>Trades</th>
+              <th>Win %</th>
+              <th>Avg %</th>
+              <th>Sum %</th>
+              <th>Last 10</th>
+            </tr>
+          </thead>
+          <tbody id="scoreboard-tbody"></tbody>
+        </table>
+      </section>
+
+      <section id="research-sec">
+        <h2>Research: S4 Square-Off Crush</h2>
+        <div class="trade-card">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.85rem;">
+            <span>Sessions Collected: <strong id="s4-sessions">0</strong></span>
+            <span>Status: <strong id="s4-promoted">Research Mode</strong></span>
+          </div>
+          <div id="s4-groups-wrap" class="empty-state" style="padding: 12px;">
+            Awaiting 40 sessions of square-off data.
+          </div>
+        </div>
+      </section>
+
+      <section id="health-sec">
+        <h2>System Health</h2>
+        <div class="trade-card card-body">
+          <div class="card-field"><span>Feed Status</span><strong id="health-feed">ok</strong></div>
+          <div class="card-field"><span>Last Poll (BSE / NSE)</span><span id="health-polls">- / -</span></div>
+          <div class="card-field"><span>LLM Errors Today</span><span id="health-llm">0</span></div>
+          <div class="card-field"><span>Engine Version</span><span id="health-version">0.3.0</span></div>
+        </div>
+      </section>
+
+      <section id="settings-sec">
+        <details id="settings-details">
+          <summary>Settings & Push Notifications</summary>
+          <div class="settings-box">
+            <div>
+              <label style="display: block; font-weight: 600; margin-bottom: 4px;">Dashboard Passphrase</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="password" id="settings-passphrase" style="flex: 1;">
+                <button id="save-passphrase-btn">Save</button>
+              </div>
+            </div>
+
+            <div>
+              <label style="display: block; font-weight: 600; margin-bottom: 4px;">Web Push Subscription</label>
+              <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <button id="enable-push-btn">Enable Notifications</button>
+                <button id="test-push-btn" style="background: var(--surface); color: var(--text); border: 1px solid var(--border);">Test Notification</button>
+              </div>
+              <textarea id="sub-output" rows="4" style="width: 100%; font-family: monospace; font-size: 0.75rem;" placeholder="Subscription JSON will appear here after enabling. Paste it into engine: python -m engine add-device"></textarea>
+              <button id="copy-sub-btn" style="margin-top: 4px; font-size: 0.8rem;">Copy Subscription</button>
+            </div>
+
+            <div class="help-box">
+              <strong>Phone Setup Tips:</strong><br>
+              • <strong>Android (Chrome):</strong> Enable notifications, then in Settings → Apps → Chrome → Battery set to <em>Unrestricted</em>.<br>
+              • <strong>iPhone (iOS 16.4+):</strong> Tap Share → <em>Add to Home Screen</em>, open from the Home Screen icon, then enable notifications.<br>
+              • <strong>PC:</strong> Ensure notifications are allowed in browser permissions.
+            </div>
+          </div>
+        </details>
+      </section>
+    </div>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="crypto.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
