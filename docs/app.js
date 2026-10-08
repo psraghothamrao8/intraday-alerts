@@ -142,6 +142,41 @@ function renderDashboard(state) {
   if (state.research && state.research.S4) {
     document.getElementById('s4-sessions').textContent = state.research.S4.sessions || 0;
     document.getElementById('s4-promoted').textContent = state.research.S4.promoted ? 'Promoted (Live)' : 'Research Mode';
+    if (state.research.S4.groups && state.research.S4.groups.length > 0) {
+      const gHtml = `
+        <table style="width:100%; font-size:0.8rem; margin-top:8px;">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Day Move</th>
+              <th>Low Deliv</th>
+              <th>n</th>
+              <th>Dip %</th>
+              <th>Bounce (5m)</th>
+              <th>Hit Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${state.research.S4.groups.map(g => `
+              <tr>
+                <td>${g.is_fno ? 'F&O' : 'Cash'}</td>
+                <td>${g.day_move_bucket}</td>
+                <td>${g.low_delivery ? 'Yes' : 'No'}</td>
+                <td>${g.n}</td>
+                <td>${g.mean_r_m_pct}%</td>
+                <td style="color:${g.mean_bounce_5_pct >= 0 ? 'var(--green)' : 'var(--red)'}">${g.mean_bounce_5_pct >= 0 ? '+' : ''}${g.mean_bounce_5_pct}%</td>
+                <td>${g.hit_rate_pct}%</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      const wrap = document.getElementById('s4-groups-wrap');
+      if (wrap) {
+        wrap.innerHTML = gHtml;
+        wrap.classList.remove('empty-state');
+      }
+    }
   }
 
   // Health

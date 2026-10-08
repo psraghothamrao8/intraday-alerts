@@ -7,7 +7,7 @@ secrets/
 *.key
 
 # Data and databases
-data/
+/data/
 *.db
 *.db-wal
 *.db-shm
