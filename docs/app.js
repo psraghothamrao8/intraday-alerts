@@ -7,6 +7,13 @@ let pollTimer = null;
 const STORAGE_KEY_PASS = 'ia_pass';
 
 function getPassphrase() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const qPass = urlParams.get('pass');
+  if (qPass) {
+    setPassphrase(qPass);
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return qPass;
+  }
   return localStorage.getItem(STORAGE_KEY_PASS) || '';
 }
 

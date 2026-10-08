@@ -40,25 +40,30 @@ def cli_vapid_gen() -> None:
     print("Put this public key in docs/config.js as vapidPublicKey.")
 
 
-def cli_add_device(name: str = "Device") -> None:
+def cli_add_device(name: str = "Device", json_str: Optional[str] = None, json_file: Optional[str] = None) -> None:
     """Add a push subscription JSON to secrets/subscriptions.json and state database."""
-    print("Paste push subscription JSON (or press Enter if copied to clipboard):")
     sub_json = ""
-
-    # Try clipboard if available
-    try:
-        import tkinter as tk
-        root = tk.Tk()
-        root.withdraw()
-        clipboard_content = root.clipboard_get().strip()
-        root.destroy()
-        if clipboard_content.startswith("{") and "endpoint" in clipboard_content:
-            sub_json = clipboard_content
-            print("Read subscription from clipboard.")
-    except Exception:
-        pass
+    if json_str:
+        sub_json = json_str.strip()
+    elif json_file:
+        sub_json = Path(json_file).read_text(encoding="utf-8").strip()
 
     if not sub_json:
+        # Try clipboard if available
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+            root.withdraw()
+            clipboard_content = root.clipboard_get().strip()
+            root.destroy()
+            if clipboard_content.startswith("{") and "endpoint" in clipboard_content:
+                sub_json = clipboard_content
+                print("Read subscription from clipboard.")
+        except Exception:
+            pass
+
+    if not sub_json:
+        print("Paste push subscription JSON (or press Enter if copied to clipboard):")
         sub_json = input().strip()
 
     try:
@@ -195,6 +200,8 @@ def main() -> None:
 
     add_dev_parser = subparsers.add_parser("add-device", help="Register a Web Push device subscription")
     add_dev_parser.add_argument("--name", default="Phone", help="Friendly name for the device")
+    add_dev_parser.add_argument("--json", dest="json_str", help="Subscription JSON string")
+    add_dev_parser.add_argument("--file", dest="json_file", help="Path to file containing subscription JSON")
 
     subparsers.add_parser("notify-test", help="Send test notification to subscribed devices")
     subparsers.add_parser("publish-test", help="Publish test state to GitHub Pages data branch")
@@ -222,7 +229,7 @@ def main() -> None:
     if args.command == "vapid-gen":
         cli_vapid_gen()
     elif args.command == "add-device":
-        cli_add_device(args.name)
+        cli_add_device(name=args.name, json_str=getattr(args, "json_str", None), json_file=getattr(args, "json_file", None))
     elif args.command == "notify-test":
         cli_notify_test()
     elif args.command == "publish-test":
