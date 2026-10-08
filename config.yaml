@@ -119,17 +119,19 @@ strategies:
 
 exits:
   news:
+    # Stop parameters calibrated from data/reports/stops_S1.md and data/reports/stops_S3.md
     thesis: ref_close           # none | ref_close | ref_minus_atr | low15_close
     thesis_buffer_atr: 0.1
-    safety_k_atr: 1.0           # recalibrated by MAE (spec 03 §5)
+    safety_k_atr: 1.0           # recalibrated by 95th percentile MAE (see data/reports/stops_S1.md & stops_S3.md)
     safety_min_gap_atr: 0.25    # safety stop at least this far beyond the thesis level
     profit_lock: avwap_after_2pct   # off | avwap_after_2pct | avwap_after_1r
     max_hold_min: null
     target_atr: null
   orb:
-    thesis: or_far_close        # or_far_close | or_mid_close | atr10_tick | atr25_tick
+    # Stop parameters calibrated from data/reports/stops_S2.md
+    thesis: or_far_close        # or_far_close | or_mid_close | atr10_tick | atr25_tick (see data/reports/stops_S2.md)
     safety_buffer_atr: 0.25
-    profit_lock: off            # off | vwap_after_1r
+    profit_lock: off            # off | vwap_after_1r (see data/reports/stops_S2.md)
   common:
     candle_grace_sec: 2
     round_number_buffer_pct: 0.15
