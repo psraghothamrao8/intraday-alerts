@@ -106,14 +106,14 @@ Also implement **`FakeBroker`** (reads recorded Parquet candles and drives ticks
 
 | Table | Source | Refresh |
 |---|---|---|
-| NSE equity list (symbol, ISIN, series) | 🔎 `https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv`, or the broker instrument master | Nightly |
-| BSE code ↔ ISIN ↔ NSE symbol | 🔎 BSE scrip master (find the "List of Scrips" download/API in DevTools), joined on ISIN. Some broker masters (e.g. Upstox) include ISIN for both exchanges | Weekly |
-| F&O stock list | The broker's NFO instrument master (unique underlyings), or 🔎 NSE `fo_mktlots.csv` | Nightly |
-| ASM / GSM / T2T lists | 🔎 NSE surveillance pages (find the JSON endpoints behind `nseindia.com/reports/asm` in DevTools); T2T = series BE/BZ | Nightly |
+| NSE equity list (symbol, ISIN, series) | ✅ `https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv` | Nightly |
+| BSE code ↔ ISIN ↔ NSE symbol | ✅ BSE scrip master API: `https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w?Group=&Scrip_cd=&Scrip_Name=&Industry=&Segment=Equity&Status=Active`, joined on ISIN | Weekly |
+| F&O stock list | ✅ NSE `https://nsearchives.nseindia.com/content/fo/fo_mktlots.csv` (Derivatives on Individual Securities) | Nightly |
+| ASM / GSM / T2T lists | ✅ NSE APIs: `https://www.nseindia.com/api/reportASM` and `https://www.nseindia.com/api/reportGSM`; T2T = series BE/BZ in Bhavcopy/EQUITY_L | Nightly |
 | Broker MIS + short lists | `broker.mis_short_lists()`, or a CSV you update: `data/ref/broker_mis.csv` (`symbol,mis_allowed,short_allowed`) | Weekly or monthly |
-| Delivery % | 🔎 NSE `https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_DDMMYYYY.csv` (`DELIV_PER` column) | Nightly |
-| Shares outstanding (for mcap) | 🔎 NSE `https://www.nseindia.com/api/quote-equity?symbol=SYM` → `securityInfo.issuedSize` (1 request per 1.5 s) | Weekly |
-| Trading holidays | 🔎 NSE `https://www.nseindia.com/api/holiday-master?type=trading` (the `CM` key) | Monthly |
+| Delivery % | ✅ NSE `https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_DDMMYYYY.csv` (`DELIV_PER` column) | Nightly |
+| Shares outstanding (for mcap) | ✅ BSE scrip master `Mktcap` (in ₹ cr), or NSE `https://www.nseindia.com/api/quote-equity?symbol=SYM` → `securityInfo.issuedSize` | Weekly |
+| Trading holidays | ✅ NSE `https://www.nseindia.com/api/holiday-master?type=trading` (the `CM` key) | Monthly |
 | FX rates (S3 orders in USD/EUR) | `config.yaml` → `fx:` (update monthly by hand) | Monthly |
 
 Output: `data/ref/universe_YYYY-MM-DD.parquet` with one row per NSE EQ symbol: `symbol, isin, bse_code, series, fno, asm_stage, gsm, mis_allowed, short_allowed, prev_close, atr14, atr_pct, adv_cr, mcap_cr, deliv_pct_20d, or_vol_avg14, tick_size`.

@@ -7,6 +7,7 @@ import base64
 import json
 from pathlib import Path
 import sys
+from typing import Optional
 from cryptography.hazmat.primitives import serialization
 from py_vapid import Vapid
 
@@ -135,6 +136,22 @@ def cli_publish_test() -> None:
         print("[ERROR] State publication failed. Check GITHUB_TOKEN and repo permissions.")
 
 
+def cli_universe(date_str: Optional[str] = None) -> None:
+    from datetime import date
+    from engine.data.universe import build_universe
+    target_d = date.fromisoformat(date_str) if date_str else None
+    print(f"Building universe for {target_d or 'today'}...")
+    df = build_universe(target_d)
+    print(f"[SUCCESS] Universe built with {len(df)} rows.")
+
+
+def cli_collect_eod(backfill: int = 0) -> None:
+    from engine.data.collect_eod import collect_eod
+    print(f"Collecting EOD candles (backfill={backfill})...")
+    files = collect_eod(backfill_days=backfill)
+    print(f"[SUCCESS] Collected {len(files)} daily Parquet candle files.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Intraday Alert Bot Engine CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -173,7 +190,11 @@ def main() -> None:
         cli_notify_test()
     elif args.command == "publish-test":
         cli_publish_test()
-    elif args.command in ("run", "replay", "universe", "collect-eod", "filings", "doctor"):
+    elif args.command == "universe":
+        cli_universe(args.date)
+    elif args.command == "collect-eod":
+        cli_collect_eod(args.backfill)
+    elif args.command in ("run", "replay", "filings", "doctor"):
         print(f"Command '{args.command}' is part of subsequent build tasks.")
     else:
         parser.print_help()
