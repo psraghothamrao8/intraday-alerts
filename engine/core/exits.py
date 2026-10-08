@@ -51,6 +51,36 @@ def compute_news_exits(
     return thesis_level, safety_stop, profit_lock, exit_by
 
 
+def compute_orb_exits(
+    symbol: str,
+    side: str,
+    or_high: float,
+    or_low: float,
+    atr14: float,
+    is_fno: bool = False,
+) -> Tuple[float, float, Optional[str], str]:
+    """
+    Computes ORB Exit Template (S2) per spec 03 §4.2:
+      Returns (thesis_level, safety_stop, profit_lock_rule, exit_by_hhmm)
+    """
+    is_long = side.upper() == "LONG"
+    atr = max(0.5, atr14)
+
+    if is_long:
+        thesis_level = round_tick(or_low)
+        safety_raw = or_low - 0.25 * atr
+        safety_stop = avoid_round_numbers(safety_raw, side="LONG")
+    else:
+        thesis_level = round_tick(or_high)
+        safety_raw = or_high + 0.25 * atr
+        safety_stop = avoid_round_numbers(safety_raw, side="SHORT")
+
+    exit_dt = last_exit_time(symbol, is_fno=is_fno)
+    exit_by = exit_dt.strftime("%H:%M")
+
+    return thesis_level, safety_stop, None, exit_by
+
+
 @dataclass
 class ExitEvent:
     trade_id: str

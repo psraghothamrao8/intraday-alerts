@@ -35,6 +35,7 @@ from engine.notify.dispatcher import NotificationDispatcher
 from engine.publish.snapshot import build_snapshot
 from engine.strategies.base import Strategy
 from engine.strategies.s1_results import S1ResultsStrategy
+from engine.strategies.s2_orb import S2OrbStrategy
 from engine.strategies.s3_filing_flash import S3FilingFlashStrategy
 
 logger = logging.getLogger("engine.core.engine")
@@ -61,8 +62,10 @@ class AlertBotEngine:
         self.strength_calibrator = get_strength_calibrator()
         self.aggregator = CandleAggregator()
 
+        self.s2_orb = S2OrbStrategy()
         self.strategies: List[Strategy] = [
             S1ResultsStrategy(),
+            self.s2_orb,
             S3FilingFlashStrategy(),
         ]
 
@@ -97,95 +100,100 @@ class AlertBotEngine:
     async def step_filing(self, filing: Dict[str, Any], current_price: Optional[float] = None) -> Optional[Trade]:
         """Process incoming filing announcement through active strategies."""
         sym = filing.get("symbol", "")
-        u_row = self.universe_map.get(sym)
-
+    async def step_filing(self, filing: Dict[str, Any], current_price: Optional[float] = None) -> Optional[Trade]:
+        """Process incoming filing announcement through active strategies."""
         for strat in self.strategies:
             try:
                 sig: Optional[Signal] = await strat.on_filing(filing, current_price=current_price)
-                if not sig:
-                    continue
-
-                # 1. Day-level risk check
-                can_enter, skip_reason = self.risk_manager.can_enter_trade(
-                    sig,
-                    list(self.open_trades.values()),
-                    universe_row=u_row,
-                )
-                if not can_enter:
-                    logger.info(f"Signal for {sym} ({sig.strategy}) blocked by risk: {skip_reason}")
-                    continue
-
-                # 2. Sizing calculation
-                adv_cr = float(u_row.get("adv_cr", 10.0) if u_row else 10.0)
-                qty, risk_inr, size_skip = self.risk_manager.calculate_quantity(
-                    entry=sig.entry_price,
-                    safety_stop=sig.safety_stop,
-                    product=sig.product,
-                    adv_cr=adv_cr,
-                )
-                if size_skip:
-                    logger.info(f"Signal for {sym} ({sig.strategy}) skipped by sizing: {size_skip}")
-                    continue
-
-                # 3. Strength calibration
-                strength, is_cal, stats_desc = self.strength_calibrator.evaluate(
-                    sig.strategy,
-                    sig.provisional_strength,
-                    raw_score=sig.raw_score,
-                )
-
-                # 4. Construct Trade
-                date_str = self.clock.today().strftime("%Y%m%d")
-                trade_id = f"{sig.strategy}-{date_str}-{sym}"
-                trade = Trade(
-                    id=trade_id,
-                    strategy=sig.strategy,
-                    symbol=sym,
-                    side=sig.side,
-                    product=sig.product,
-                    strength=strength,
-                    raw_score=sig.raw_score,
-                    why=sig.why,
-                    source_url=sig.source_url,
-                    signal_time=self.clock.now().isoformat(),
-                    ref_price=sig.ref_price,
-                    max_entry=sig.entry_price,
-                    paper_entry=sig.entry_price,
-                    valid_till=sig.valid_till,
-                    qty=qty,
-                    risk_inr=risk_inr,
-                    thesis_tf=sig.thesis_tf,
-                    thesis_dir=sig.thesis_dir,
-                    thesis_level=sig.thesis_level,
-                    safety_stop=sig.safety_stop,
-                    target=sig.target,
-                    exit_by=sig.exit_by,
-                    profit_lock_rule=sig.profit_lock_rule,
-                    profit_lock_active=False,
-                    status="OPEN",
-                    notified=False,
-                )
-
-                # 5. Save to database
-                save_trade(trade.to_dict(), self.db_conn)
-
-                # 6. Dispatch notification if strength meets threshold
-                min_strength = self.settings.notify.min_strength
-                if strength >= min_strength:
-                    sent = self.dispatcher.dispatch_trade_entry(trade.to_dict())
-                    if sent:
-                        trade.notified = True
-                        update_trade(trade.id, {"notified": 1}, self.db_conn)
-
-                self.open_trades[trade.id] = trade
-                self.risk_manager.record_entry(trade)
-                logger.info(f"[ENTRY] {trade.id} {trade.side} qty={qty} strength={strength}/10")
-                return trade
-
+                if sig:
+                    trade = self._handle_signal(sig)
+                    if trade:
+                        return trade
             except Exception as e:
                 logger.error(f"Error evaluating filing in {strat.name}: {e}", exc_info=True)
-
         return None
+
+    def _handle_signal(self, sig: Signal) -> Optional[Trade]:
+        """Process a generated signal through risk limits, sizing, and notification."""
+        sym = sig.symbol
+        u_row = self.universe_map.get(sym)
+
+        # 1. Day-level risk check
+        can_enter, skip_reason = self.risk_manager.can_enter_trade(
+            sig,
+            list(self.open_trades.values()),
+            universe_row=u_row,
+        )
+        if not can_enter:
+            logger.info(f"Signal for {sym} ({sig.strategy}) blocked by risk: {skip_reason}")
+            return None
+
+        # 2. Sizing calculation
+        adv_cr = float(u_row.get("adv_cr", 10.0) if u_row else 10.0)
+        qty, risk_inr, size_skip = self.risk_manager.calculate_quantity(
+            entry=sig.entry_price,
+            safety_stop=sig.safety_stop,
+            product=sig.product,
+            adv_cr=adv_cr,
+        )
+        if size_skip:
+            logger.info(f"Signal for {sym} ({sig.strategy}) skipped by sizing: {size_skip}")
+            return None
+
+        # 3. Strength calibration
+        strength, is_cal, stats_desc = self.strength_calibrator.evaluate(
+            sig.strategy,
+            sig.provisional_strength,
+            raw_score=sig.raw_score,
+        )
+
+        # 4. Construct Trade
+        date_str = self.clock.today().strftime("%Y%m%d")
+        trade_id = f"{sig.strategy}-{date_str}-{sym}"
+        trade = Trade(
+            id=trade_id,
+            strategy=sig.strategy,
+            symbol=sym,
+            side=sig.side,
+            product=sig.product,
+            strength=strength,
+            raw_score=sig.raw_score,
+            why=sig.why,
+            source_url=sig.source_url,
+            signal_time=self.clock.now().isoformat(),
+            ref_price=sig.ref_price,
+            max_entry=sig.entry_price,
+            paper_entry=sig.entry_price,
+            valid_till=sig.valid_till,
+            qty=qty,
+            risk_inr=risk_inr,
+            thesis_tf=sig.thesis_tf,
+            thesis_dir=sig.thesis_dir,
+            thesis_level=sig.thesis_level,
+            safety_stop=sig.safety_stop,
+            target=sig.target,
+            exit_by=sig.exit_by,
+            profit_lock_rule=sig.profit_lock_rule,
+            profit_lock_active=False,
+            status="OPEN",
+            notified=False,
+        )
+
+        # 5. Save to database
+        save_trade(trade.to_dict(), self.db_conn)
+
+        # 6. Dispatch notification if strength meets threshold
+        min_strength = self.settings.notify.min_strength
+        if strength >= min_strength:
+            sent = self.dispatcher.dispatch_trade_entry(trade.to_dict())
+            if sent:
+                trade.notified = True
+                update_trade(trade.id, {"notified": 1}, self.db_conn)
+
+        self.open_trades[trade.id] = trade
+        self.risk_manager.record_entry(trade)
+        logger.info(f"[ENTRY] {trade.id} {trade.side} qty={qty} strength={strength}/10")
+        return trade
 
     def step_tick(self, tick: Tick) -> List[ExitEvent]:
         """Process incoming tick, evaluate safety stop, and update candles."""
@@ -212,7 +220,9 @@ class AlertBotEngine:
         """Process completed 1-minute candle, check 5-minute aggregation."""
         exits: List[ExitEvent] = []
         for strat in self.strategies:
-            strat.on_candle_1m(candle)
+            sig = strat.on_candle_1m(candle)
+            if sig:
+                self._handle_signal(sig)
 
         completed_5m = self.aggregator.on_candle_1m(candle)
         for c5 in completed_5m:
@@ -243,6 +253,12 @@ class AlertBotEngine:
         """Process clock update, evaluate time exits."""
         exits: List[ExitEvent] = []
         prices = current_prices or {}
+
+        for strat in self.strategies:
+            strat_signals = strat.on_clock(now)
+            if strat_signals:
+                for sig in strat_signals:
+                    self._handle_signal(sig)
 
         for trade in list(self.open_trades.values()):
             u_row = self.universe_map.get(trade.symbol)

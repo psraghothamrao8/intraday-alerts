@@ -22,7 +22,7 @@ class Strategy(ABC):
         """Called once when the engine starts for the trading day."""
         pass
 
-    async def on_filing(self, filing: Dict[str, Any]) -> Optional[Signal]:
+    async def on_filing(self, filing: Dict[str, Any], current_price: Optional[float] = None, **kwargs) -> Optional[Signal]:
         """Called when a new exchange filing is received and parsed."""
         return None
 
