@@ -152,6 +152,15 @@ def cli_collect_eod(backfill: int = 0) -> None:
     print(f"[SUCCESS] Collected {len(files)} daily Parquet candle files.")
 
 
+def cli_filings(replay_date_str: Optional[str] = None) -> None:
+    from datetime import date
+    from engine.data.filings_replay import replay_filings_for_date
+    target_d = date.fromisoformat(replay_date_str) if replay_date_str else date.today()
+    print(f"Replaying filings for {target_d}...")
+    res = replay_filings_for_date(target_d)
+    print(f"\n[SUCCESS] Replayed {len(res)} filings for {target_d}.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Intraday Alert Bot Engine CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -194,7 +203,9 @@ def main() -> None:
         cli_universe(args.date)
     elif args.command == "collect-eod":
         cli_collect_eod(args.backfill)
-    elif args.command in ("run", "replay", "filings", "doctor"):
+    elif args.command == "filings":
+        cli_filings(args.replay)
+    elif args.command in ("run", "replay", "doctor"):
         print(f"Command '{args.command}' is part of subsequent build tasks.")
     else:
         parser.print_help()
