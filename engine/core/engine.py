@@ -101,9 +101,6 @@ class AlertBotEngine:
 
     async def step_filing(self, filing: Dict[str, Any], current_price: Optional[float] = None) -> Optional[Trade]:
         """Process incoming filing announcement through active strategies."""
-        sym = filing.get("symbol", "")
-    async def step_filing(self, filing: Dict[str, Any], current_price: Optional[float] = None) -> Optional[Trade]:
-        """Process incoming filing announcement through active strategies."""
         for strat in self.strategies:
             try:
                 sig: Optional[Signal] = await strat.on_filing(filing, current_price=current_price)
