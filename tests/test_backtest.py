@@ -126,3 +126,44 @@ def test_calibration_and_strength_calibrator(tmp_path):
     assert 1 <= strength <= 10
     assert past_stats is not None
     assert "Similar past signals:" in past_stats
+
+
+def test_simulation_engine_s2_historical():
+    """Verify S2 historical simulation runs with realistic exits and cost accounting."""
+    engine = SimulationEngine()
+    trades = engine.run_simulation(
+        strategy_name="S2",
+        start_date=date(2026, 9, 30),
+        end_date=date(2026, 10, 8),
+        delay_min=1.0,
+    )
+    assert len(trades) > 0
+    filled = [t for t in trades if t.status == "EXITED"]
+    assert len(filled) > 0
+    for t in filled:
+        assert t.strategy == "S2"
+        assert t.entry_price > 0
+        assert t.exit_price > 0
+        assert any(k in t.exit_reason for k in ("safety_stop", "thesis", "time", "eod_squareoff"))
+        assert t.mae_atr >= 0.0
+        assert t.mfe_atr >= 0.0
+        assert -100.0 < t.net_pnl_pct < 100.0
+
+
+def test_simulation_engine_s3_historical():
+    """Verify S3 filing flash simulation produces valid executed trades."""
+    engine = SimulationEngine()
+    trades = engine.run_simulation(
+        strategy_name="S3",
+        start_date=date(2026, 10, 8),
+        end_date=date(2026, 10, 8),
+        delay_min=1.0,
+    )
+    assert len(trades) >= 1
+    t = trades[0]
+    assert t.strategy == "S3"
+    assert t.symbol == "EMSLIMITED"
+    assert t.status == "EXITED"
+    assert t.provisional_strength >= 6
+    assert t.net_pnl_pct != 0.0
+

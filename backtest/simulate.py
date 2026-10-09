@@ -101,12 +101,44 @@ class SimulationEngine:
             return []
 
         # Determine out-of-sample threshold date
-        split_idx = int(len(trade_dates) * (1.0 - oos_ratio))
-        oos_threshold = trade_dates[split_idx] if split_idx < len(trade_dates) else trade_dates[-1]
+        test_dates = trade_dates[14:] if (strategy_name.upper() == "S2" and len(trade_dates) > 14) else trade_dates
+        split_idx = int(len(test_dates) * (1.0 - oos_ratio))
+        oos_threshold = test_dates[split_idx] if split_idx < len(test_dates) else test_dates[-1]
+
+        # Auto-load filings from state.db if not provided
+        if filings_records is None and strategy_name.upper() in ("S1", "S3"):
+            try:
+                import sqlite3
+                from engine.core.state import get_connection
+                conn = get_connection()
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute("SELECT * FROM filings").fetchall()
+                filings_records = [dict(r) for r in rows]
+            except Exception as e:
+                logger.warning(f"Could not load filings from DB: {e}")
+                filings_records = []
+
+        # Index filings by date once
+        filings_by_date: Dict[date, List[dict]] = {}
+        if filings_records:
+            for f in filings_records:
+                if not f.get("extraction_json"):
+                    continue
+                d_str = f.get("disseminated_at")
+                if d_str:
+                    try:
+                        d_val = datetime.fromisoformat(d_str).date()
+                        filings_by_date.setdefault(d_val, []).append(f)
+                    except Exception:
+                        pass
 
         all_trades: List[SimulatedTrade] = []
 
         for cur_date in trade_dates:
+            # If news strategy and no filings on this day, skip reading parquet
+            if strategy_name.upper() in ("S1", "S3") and cur_date not in filings_by_date:
+                continue
+
             is_oos = cur_date >= oos_threshold
             day_trades = self._simulate_day(
                 strategy_name=strategy_name,
@@ -115,7 +147,7 @@ class SimulationEngine:
                 is_oos=is_oos,
                 candle_dir=candle_path,
                 universe_path=universe_path,
-                filings_records=filings_records,
+                filings_records=filings_by_date.get(cur_date, []),
             )
             all_trades.extend(day_trades)
 
@@ -195,6 +227,8 @@ class SimulationEngine:
                 try:
                     f_dt = datetime.fromisoformat(f_dt_str)
                     if f_dt.date() == cur_date and time(9, 15) <= f_dt.time() <= time(15, 0):
+                        if not f.get("extraction_json"):
+                            continue
                         sym = f.get("symbol")
                         sym_df = candles_by_sym.get(sym)
                         cur_p = float(sym_df.iloc[0]["open"]) if sym_df is not None and not sym_df.empty else 100.0
@@ -354,6 +388,7 @@ class SimulationEngine:
                     if b_low <= sig.safety_stop:
                         exit_evt = ExitEvent(
                             trade_id=trade_id,
+                            symbol=sym,
                             exit_time=b_ts.isoformat(),
                             exit_price=sig.safety_stop,
                             exit_reason="safety_stop",
@@ -365,6 +400,7 @@ class SimulationEngine:
                     if b_high >= sig.safety_stop:
                         exit_evt = ExitEvent(
                             trade_id=trade_id,
+                            symbol=sym,
                             exit_time=b_ts.isoformat(),
                             exit_price=sig.safety_stop,
                             exit_reason="safety_stop",
@@ -399,6 +435,7 @@ class SimulationEngine:
                 exit_price = float(last_bar["close"])
                 exit_evt = ExitEvent(
                     trade_id=trade_id,
+                    symbol=sym,
                     exit_time=last_bar["ts_dt"].isoformat(),
                     exit_price=exit_price,
                     exit_reason="eod_squareoff",
@@ -418,14 +455,15 @@ class SimulationEngine:
             mfe_atr = round(mfe_inr / atr14, 2) if atr14 > 0 else 0.0
 
             # Zerodha transaction costs
-            costs = calculate_intraday_costs(
-                buy_price=fill_price if sig.side == "LONG" else exit_evt.exit_price,
-                sell_price=exit_evt.exit_price if sig.side == "LONG" else fill_price,
-                qty=qty,
+            buy_val = (fill_price if sig.side == "LONG" else exit_evt.exit_price) * qty
+            sell_val = (exit_evt.exit_price if sig.side == "LONG" else fill_price) * qty
+            total_cost_inr = calculate_intraday_costs(
+                buy_value=buy_val,
+                sell_value=sell_val,
                 adv_cr=adv_cr,
-                is_news_trade=sig.strategy in ("S1", "S3"),
+                is_news_recent=sig.strategy in ("S1", "S3"),
             )
-            cost_pct = (costs["total"] / (fill_price * qty)) * 100.0
+            cost_pct = (total_cost_inr / (fill_price * qty)) * 100.0 if (fill_price * qty) > 0 else 0.0
             net_pct = round(gross_pct - cost_pct, 2)
 
             risk_denom = abs(fill_price - sig.safety_stop)
@@ -502,3 +540,63 @@ def run_edge_decay_analysis(
         })
 
     return pd.DataFrame(results)
+
+
+def main():
+    import argparse
+    from backtest.report import generate_backtest_report
+    from backtest.calibrate import calibrate_strategy_trades
+
+    parser = argparse.ArgumentParser(description="Backtest simulation engine (spec 06)")
+    parser.add_argument("--strategy", type=str, default="S2", choices=["S1", "S2", "S3", "ALL"], help="Strategy to simulate")
+    parser.add_argument("--start-date", type=str, default="2026-09-10", help="Start date (YYYY-MM-DD)")
+    parser.add_argument("--end-date", type=str, default="2026-10-09", help="End date (YYYY-MM-DD)")
+    parser.add_argument("--delay", type=float, default=1.0, help="Entry delay in minutes")
+    parser.add_argument("--report", action="store_true", help="Generate markdown & CSV reports")
+    parser.add_argument("--calibrate", action="store_true", help="Calibrate trade strength and write json")
+    parser.add_argument("--all", action="store_true", help="Run S1, S2, S3 with report and calibration")
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
+    d_start = date.fromisoformat(args.start_date)
+    d_end = date.fromisoformat(args.end_date)
+    strats = ["S1", "S2", "S3"] if (args.all or args.strategy == "ALL") else [args.strategy.upper()]
+
+    engine = SimulationEngine()
+    for strat in strats:
+        logger.info(f"=== Running Simulation for {strat} ({d_start} to {d_end}, delay={args.delay}m) ===")
+        trades = engine.run_simulation(
+            strategy_name=strat,
+            start_date=d_start,
+            end_date=d_end,
+            delay_min=args.delay,
+        )
+        filled_count = sum(1 for t in trades if t.status == 'EXITED')
+        logger.info(f"{strat}: Generated {len(trades)} trades ({filled_count} filled).")
+
+        edge_df = None
+        if strat in ("S1", "S3"):
+            logger.info(f"Running edge decay analysis for {strat}...")
+            edge_df = run_edge_decay_analysis(
+                strategy_name=strat,
+                start_date=d_start,
+                end_date=d_end,
+            )
+
+        if args.report or args.all:
+            rep_file = generate_backtest_report(
+                strategy=strat,
+                trades=trades,
+                edge_decay_df=edge_df,
+            )
+            print(f"Report written: {rep_file}")
+
+        if args.calibrate or args.all:
+            cal_file = calibrate_strategy_trades(strat, trades)
+            print(f"Calibration saved: {cal_file}")
+
+
+if __name__ == "__main__":
+    main()
+

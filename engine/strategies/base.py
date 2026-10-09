@@ -26,6 +26,18 @@ class Strategy(ABC):
         """Called when a new exchange filing is received and parsed."""
         return None
 
+    def on_filing_sync(self, filing: Dict[str, Any], current_price: Optional[float] = None, **kwargs) -> Optional[Signal]:
+        """Synchronous wrapper for on_filing, used in simulation and backtest loops."""
+        import asyncio
+        import concurrent.futures
+        try:
+            loop = asyncio.get_running_loop()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(asyncio.run, self.on_filing(filing, current_price=current_price, **kwargs)).result()
+        except RuntimeError:
+            return asyncio.run(self.on_filing(filing, current_price=current_price, **kwargs))
+
+
     def on_candle_1m(self, candle: Candle) -> Optional[Signal]:
         """Called when a 1-minute candle completes (at MM:02)."""
         return None

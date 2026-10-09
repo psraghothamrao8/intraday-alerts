@@ -88,8 +88,8 @@ class ExitEvent:
     exit_time: str
     exit_price: float
     exit_reason: str
-    net_pnl_pct: float
-    net_pnl_inr: float
+    net_pnl_pct: float = 0.0
+    net_pnl_inr: float = 0.0
 
 
 class ExitEngine:

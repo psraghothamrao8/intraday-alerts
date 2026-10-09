@@ -237,6 +237,14 @@ class LlmReader:
                         elif "bil" in unit_str: unit = "billions"
                     except ValueError:
                         pass
+                else:
+                    m_raw = re.search(r"(?:rs\.?|inr|₹)\s*([\d,]{7,})(?:/-)?", full)
+                    if m_raw:
+                        try:
+                            val = float(m_raw.group(1).replace(",", ""))
+                            unit = "rupees"
+                        except ValueError:
+                            pass
 
                 binding = True
                 if any(w in full for w in ["mou", "memorandum of understanding", "letter of intent", "loi", "l1"]):
@@ -252,6 +260,15 @@ class LlmReader:
                 elif any(w in full for w in ["private", "ltd", "corp", "inc"]):
                     cust_type = "private"
 
+                exec_months = None
+                m_exec = re.search(r"(\d+)\s*(months?|years?)\b", full)
+                if m_exec:
+                    try:
+                        n_val = float(m_exec.group(1))
+                        exec_months = n_val * 12.0 if "year" in m_exec.group(2).lower() else n_val
+                    except ValueError:
+                        pass
+
                 return FilingExtraction(
                     kind="order",
                     binding=binding,
@@ -259,6 +276,7 @@ class LlmReader:
                     currency=curr,
                     unit=unit,
                     customer_type=cust_type,
+                    execution_months=exec_months,
                     summary=user_instruction[:120]
                 )  # type: ignore
 

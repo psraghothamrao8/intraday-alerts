@@ -106,7 +106,7 @@ class S2OrbStrategy(Strategy):
         # Check if this is the 09:15 candle (ending at 09:20)
         c_ts = getattr(candle, "timestamp", getattr(candle, "ts", None))
         c_time = c_ts.time() if c_ts else None
-        if c_time and c_time.hour == 9 and c_time.minute in (15, 20):
+        if c_time and c_time.hour == 9 and (15 <= c_time.minute <= 20):
             if sym not in self.or_candles:
                 self.or_candles[sym] = candle
 

@@ -35,6 +35,12 @@ def download_pdf(url: str, is_bse: bool = False, cache_dir: Path | str = "data/p
     cache_path = Path(cache_dir)
     cache_path.mkdir(parents=True, exist_ok=True)
 
+    url_hash = hashlib.sha256(url.encode()).hexdigest()
+    url_cached_file = cache_path / f"url_{url_hash}.pdf"
+    if url_cached_file.exists():
+        cached_bytes = url_cached_file.read_bytes()
+        return cached_bytes, hashlib.sha256(cached_bytes).hexdigest()
+
     session = get_bse_session() if is_bse else get_nse_session()
     headers = {"Referer": "https://www.bseindia.com/"} if is_bse else {"Referer": "https://www.nseindia.com/"}
 
