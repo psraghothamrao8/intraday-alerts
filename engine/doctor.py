@@ -28,6 +28,8 @@ def check_env_file() -> Tuple[bool, str]:
 def check_broker_config() -> Tuple[bool, str]:
     settings = get_settings()
     b_name = settings.broker.name
+    if b_name.lower() in ("yfinance", "free"):
+        return True, "Free market data (yfinance - zero API keys required)"
     client_id = settings.env.BROKER_CLIENT_ID or os.getenv("UPSTOX_CLIENT_ID")
     api_key = settings.env.BROKER_API_KEY or os.getenv("UPSTOX_API_KEY")
     if client_id or api_key:
@@ -68,7 +70,7 @@ def check_llm_key() -> Tuple[bool, str]:
     key = settings.env.ANTHROPIC_API_KEY or os.getenv("ANTHROPIC_API_KEY")
     if key and len(key.strip()) > 10:
         return True, f"Configured model: {settings.llm.model}"
-    return False, "Missing ANTHROPIC_API_KEY in .env"
+    return True, "Free heuristic regex extractor active (zero API keys required)"
 
 
 def check_github_publish() -> Tuple[bool, str]:

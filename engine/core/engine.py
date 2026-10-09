@@ -414,6 +414,16 @@ class AlertBotEngine:
         uploader = GithubDataUploader()
         shutdown_time = time(15, 45)
 
+        # Initialize market data broker
+        broker_name = self.settings.broker.name.lower()
+        if broker_name == "upstox":
+            from engine.data.broker_upstox import UpstoxBroker
+            broker = UpstoxBroker()
+        else:
+            from engine.data.broker_yfinance import YFinanceBroker
+            broker = YFinanceBroker()
+        await broker.login()
+
         async def poll_bse():
             while self.clock.now().time() < shutdown_time:
                 try:
@@ -448,6 +458,50 @@ class AlertBotEngine:
                     logger.warning(f"Publish error: {e}")
                 await asyncio.sleep(self.settings.publish.min_interval_sec)
 
+        async def market_data_loop():
+            while self.clock.now().time() < shutdown_time:
+                try:
+                    cur_now = self.clock.now()
+                    # 1. If past 09:20 and ranking not done, compute S2 setups
+                    if cur_now.time() >= time(9, 20) and not self.s2_orb.ranking_done:
+                        top_eligible = sorted(
+                            list(self.s2_orb.eligible_symbols),
+                            key=lambda s: float(self.universe_map.get(s, {}).get("adv_cr", 0.0) or 0.0),
+                            reverse=True
+                        )[:30]
+                        for sym in top_eligible:
+                            try:
+                                df_c = await broker.intraday_candles(sym, interval="5minute")
+                                if not df_c.empty:
+                                    first_row = df_c.iloc[0]
+                                    ts_val = first_row["ts"]
+                                    c = Candle(
+                                        symbol=sym,
+                                        timestamp=ts_val.to_pydatetime() if hasattr(ts_val, "to_pydatetime") else cur_now,
+                                        open=float(first_row["open"]),
+                                        high=float(first_row["high"]),
+                                        low=float(first_row["low"]),
+                                        close=float(first_row["close"]),
+                                        volume=int(first_row["volume"]),
+                                    )
+                                    self.step_candle_5m(c)
+                            except Exception as e:
+                                logger.debug(f"Could not load 5m candle for {sym}: {e}")
+
+                        self.s2_orb.compute_ranking()
+
+                    # 2. Check open trades prices
+                    if self.open_trades:
+                        syms = list({t.symbol for t in self.open_trades.values()})
+                        quotes = await broker.quotes(syms)
+                        prices = {sym: q.ltp for sym, q in quotes.items()}
+                        self.step_clock(cur_now, current_prices=prices)
+
+                except Exception as e:
+                    logger.warning(f"Market data loop error: {e}")
+
+                await asyncio.sleep(30.0)
+
         print("[RUNNING] Alert Bot is live. Monitoring BSE/NSE announcements and price feeds...")
         try:
             await asyncio.gather(
@@ -455,6 +509,7 @@ class AlertBotEngine:
                 poll_nse(),
                 clock_and_exit_loop(),
                 publish_loop(),
+                market_data_loop(),
             )
         except asyncio.CancelledError:
             pass

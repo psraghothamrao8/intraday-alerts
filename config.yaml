@@ -3,7 +3,7 @@ timezone: Asia/Kolkata
 capital_inr: 500000             # your trading capital; used for sizing and the loss limits
 
 broker:
-  name: upstox                  # adapter: upstox | angel | fyers | dhan | zerodha  (use your broker)
+  name: yfinance               # adapter: yfinance (100% free, zero api keys) | upstox | angel | fyers
   login_mode: manual            # manual | auto_totp  (see spec 05 §5)
   callback_port: 8765
   squareoff:                    # YOUR broker's MIS auto square-off times (check them; they change)
