@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 import pandas as pd
 
+from engine.core.calendar import previous_trading_day
 from engine.core.clock import get_clock
 from engine.data.bhavcopy import fetch_bhavcopy
 from engine.data.http import get_bse_session, get_nse_session
@@ -165,6 +166,10 @@ def build_universe(target_date: Optional[date] = None, output_dir: Path | str = 
     bse_map = fetch_bse_scrips()
     asm_map, gsm_set = fetch_surveillance_lists()
     bhav_df = fetch_bhavcopy(target_date)
+    if bhav_df.empty:
+        prev_dt = previous_trading_day(target_date)
+        logger.info(f"Bhavcopy for {target_date} not available (e.g. morning pre-market); falling back to previous trading day {prev_dt}")
+        bhav_df = fetch_bhavcopy(prev_dt)
 
     # Index Bhavcopy by SYMBOL for fast lookup
     bhav_lookup = {}

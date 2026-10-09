@@ -147,3 +147,14 @@ class StatePublisher:
             self.last_published_time = now_ts
             self.last_content_hash = content_hash
         return success
+
+    def publish_snapshot(self, snapshot: Optional[Dict[str, Any]] = None, force: bool = False) -> bool:
+        """Publish snapshot directly or trigger state snapshot generation."""
+        if snapshot is not None and isinstance(snapshot, dict) and "data" in snapshot:
+            return upload_envelope(snapshot)
+        return self.publish_if_needed(force=force)
+
+
+# Alias for backward and forward compatibility
+GithubDataUploader = StatePublisher
+

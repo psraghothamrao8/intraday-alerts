@@ -446,8 +446,7 @@ class AlertBotEngine:
         async def publish_loop():
             while self.clock.now().time() < shutdown_time:
                 try:
-                    snap = build_snapshot(self.clock.today().isoformat(), conn=self.db_conn)
-                    uploader.publish_snapshot(snap)
+                    uploader.publish_if_needed()
                 except Exception as e:
                     logger.warning(f"Publish error: {e}")
                 await asyncio.sleep(self.settings.publish.min_interval_sec)
