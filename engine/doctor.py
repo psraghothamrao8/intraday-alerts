@@ -69,7 +69,10 @@ def check_llm_key() -> Tuple[bool, str]:
     settings = get_settings()
     key = settings.env.ANTHROPIC_API_KEY or os.getenv("ANTHROPIC_API_KEY")
     if key and len(key.strip()) > 10:
-        return True, f"Configured model: {settings.llm.model}"
+        return True, f"Anthropic Claude active ({settings.llm.model})"
+    nv_key = settings.env.NVIDIA_API_KEY or os.getenv("NVIDIA_API_KEY")
+    if nv_key and len(nv_key.strip()) > 10:
+        return True, "NVIDIA Nemotron 30B active (free endpoint with heuristic fallback)"
     return True, "Free heuristic regex extractor active (zero API keys required)"
 
 

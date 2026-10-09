@@ -9,6 +9,7 @@ import re
 from typing import Any, Dict, List, Optional, Type, TypeVar
 import anthropic
 from pydantic import BaseModel
+import requests
 
 from engine.config import get_settings
 from engine.llm.schemas import ResultsExtraction, FilingExtraction, Period, Statement
@@ -81,9 +82,18 @@ class LlmReader:
         text_content: Optional[str] = None,
         pdf_base64: Optional[str] = None
     ) -> Optional[T]:
+        # 1. Official Anthropic SDK if configured
         api_key = self.settings.ANTHROPIC_API_KEY
         if not api_key:
-            logger.info("[FREE MODE] ANTHROPIC_API_KEY not configured: using free heuristic text extractor.")
+            # 2. Free NVIDIA Nemotron API if configured
+            if self.settings.NVIDIA_API_KEY:
+                logger.info("[NVIDIA MODE] Using free NVIDIA Nemotron 30B model for filings extraction.")
+                res = await self._call_nvidia(system_prompt, user_instruction, schema, text_content)
+                if res is not None:
+                    return res
+
+            # 3. Free heuristic regex text extractor fallback
+            logger.info("[FREE MODE] Using free heuristic regex text extractor.")
             return self._heuristic_extract(schema, user_instruction, text_content)
 
         cfg = self.settings.llm
@@ -136,6 +146,64 @@ class LlmReader:
                     await asyncio.sleep(2.0)
                 else:
                     return None
+        return None
+
+    async def _call_nvidia(
+        self,
+        system_prompt: str,
+        user_instruction: str,
+        schema: Type[T],
+        text_content: Optional[str] = None
+    ) -> Optional[T]:
+        """Call free NVIDIA Nemotron endpoint for structured filings extraction."""
+        nv_key = self.settings.NVIDIA_API_KEY
+        base_url = self.settings.NVIDIA_BASE_URL or "https://integrate.api.nvidia.com/v1"
+        if not nv_key:
+            return None
+
+        prompt_full = (
+            f"{system_prompt}\n\n"
+            f"Filing text:\n{text_content[:6000] if text_content else ''}\n\n"
+            f"Task: {user_instruction}\n"
+            f"IMPORTANT: Respond ONLY with a valid JSON object conforming to the schema. No markdown formatting, no code blocks, no explanations."
+        )
+
+        headers = {
+            "Authorization": f"Bearer {nv_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+            "messages": [
+                {"role": "system", "content": "You are a financial filing extraction assistant. Respond ONLY with valid JSON."},
+                {"role": "user", "content": prompt_full}
+            ],
+            "temperature": 0.1,
+            "max_tokens": 2048,
+        }
+
+        loop = asyncio.get_running_loop()
+        try:
+            resp = await loop.run_in_executor(
+                None,
+                lambda: requests.post(f"{base_url}/chat/completions", headers=headers, json=payload, timeout=30)
+            )
+            if resp.status_code == 200:
+                raw_json = resp.json()["choices"][0]["message"]["content"]
+                raw_json = raw_json.strip()
+                if raw_json.startswith("```"):
+                    lines = raw_json.splitlines()
+                    if lines[0].startswith("```"):
+                        lines = lines[1:]
+                    if lines and lines[-1].startswith("```"):
+                        lines = lines[:-1]
+                    raw_json = "\n".join(lines).strip()
+                return schema.model_validate_json(raw_json)
+            else:
+                logger.warning(f"NVIDIA API returned HTTP {resp.status_code}: {resp.text[:150]}")
+        except Exception as e:
+            logger.warning(f"NVIDIA API extraction failed: {e}")
+
         return None
 
     def _heuristic_extract(

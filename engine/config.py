@@ -262,6 +262,8 @@ class EnvSettings(BaseSettings):
     BROKER_TOTP_SECRET: str = ""
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_CHAT_ID: str = ""
+    NVIDIA_API_KEY: str = ""
+    NVIDIA_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
 
 
 class Settings:
@@ -389,6 +391,14 @@ class Settings:
     @property
     def TELEGRAM_CHAT_ID(self) -> str:
         return self._env.TELEGRAM_CHAT_ID
+
+    @property
+    def NVIDIA_API_KEY(self) -> str:
+        return self._env.NVIDIA_API_KEY
+
+    @property
+    def NVIDIA_BASE_URL(self) -> str:
+        return self._env.NVIDIA_BASE_URL
 
 
 _SETTINGS_INSTANCE: Settings | None = None
