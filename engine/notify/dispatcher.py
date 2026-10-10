@@ -39,7 +39,8 @@ class NotificationDispatcher:
         trade_id = trade["id"]
         notif_id = f"{trade_id}:ENTRY"
 
-        title, body = format_entry(trade)
+        is_simple = getattr(settings.notify, "format", "standard") == "simple"
+        title, body = format_entry(trade, simple=is_simple)
         payload = build_push_payload("ENTRY", trade_id, title, body)
         ttl = settings.notify.webpush.ttl_entry_sec
 
@@ -54,7 +55,8 @@ class NotificationDispatcher:
         trade_id = trade["id"]
         notif_id = f"{trade_id}:EXIT"
 
-        title, body = format_exit(trade)
+        is_simple = getattr(settings.notify, "format", "standard") == "simple"
+        title, body = format_exit(trade, simple=is_simple)
         payload = build_push_payload("EXIT", trade_id, title, body)
         ttl = settings.notify.webpush.ttl_exit_sec
 

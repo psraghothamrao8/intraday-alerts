@@ -153,3 +153,49 @@ def test_null_lines_omitted():
     title, body = format_entry(trade)
     assert title == "🟢 BUY TATASTEEL · 6/10"
     assert body == "Buy ≤ ₹150.00 now"
+
+
+def test_entry_simple_mode():
+    trade = {
+        "id": "S1-20261008-KPITTECH",
+        "symbol": "KPITTECH",
+        "side": "LONG",
+        "product": "MIS",
+        "strength": 8,
+        "max_entry": 1452.00,
+        "valid_till": "11:45",
+        "exit_by": "15:07",
+        "thesis": {"tf": "5m", "dir": "below", "level": 1428.50},
+        "safety_stop": 1404.00,
+        "qty": 41,
+        "risk_inr": 1968,
+        "why": "Q2 results: Rev +28% · PAT +61% · margin +310bps (consol.)"
+    }
+    title, body = format_entry(trade, simple=True)
+    assert title == "🟢 BUY KPITTECH · 8/10"
+    expected_body = (
+        "1. Buy MIS ≤ ₹1,452.00 (valid 11:45) · Qty 41 (risk ₹1,968)\n"
+        "2. Safety Stop: ₹1,404.00 (put SL-M order in broker now)\n"
+        "3. Exit by 15:07 (or if 5-min candle breaks ₹1,428.50)\n"
+        "Why: Q2 results: Rev +28% · PAT +61% · margin +310bps (consol.)"
+    )
+    assert body == expected_body
+
+
+def test_exit_simple_mode():
+    trade = {
+        "id": "S1-20261008-KPITTECH",
+        "symbol": "KPITTECH",
+        "side": "LONG",
+        "exit_reason": "Idea broken: 5-min close ₹1,426.80 below ₹1,428.50",
+        "paper_net_pct": -1.6,
+        "paper_pnl_inr": -950,
+    }
+    title, body = format_exit(trade, simple=True)
+    assert title == "🔴 SELL KPITTECH now"
+    expected_body = (
+        "1. Reason: Idea broken: 5-min close ₹1,426.80 below ₹1,428.50\n"
+        "2. Result: −1.6% (−₹950)\n"
+        "3. Action: Sell in broker & cancel safety SL order."
+    )
+    assert body == expected_body

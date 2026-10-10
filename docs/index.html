@@ -38,6 +38,18 @@
 
     <!-- Dashboard Content (unlocked) -->
     <div id="dashboard-view" style="display: none;">
+      <details id="guide-details" style="margin-bottom: 20px;">
+        <summary style="cursor: pointer; font-weight: 600; font-size: 0.9rem; color: var(--blue);">
+          💡 How to execute an alert (Quick Guide)
+        </summary>
+        <div style="margin-top: 12px; font-size: 0.85rem; line-height: 1.6; display: flex; flex-direction: column; gap: 8px;">
+          <div><strong>1. Entry Order:</strong> In your broker app (Zerodha, Groww, Upstox, etc.), place a <em>Limit Order</em> at or below the max entry price before the validity time expires.</div>
+          <div><strong>2. Safety Stop (SL-M):</strong> Immediately place an <em>SL-M (Stop-Loss Market)</em> order at the Safety SL price. This is your hard safety net against unexpected sudden drops.</div>
+          <div><strong>3. Monitor via Bot:</strong> You don't need to stare at charts. The bot watches the 5-min candles ("Thesis Stop"). If the thesis breaks or the profit target is hit, you will receive a 🔴 SELL alert.</div>
+          <div><strong>4. Exit & Clean up:</strong> When you receive the exit alert (or at the intraday cutoff like 15:07), exit the trade in your broker and cancel your pending Safety SL order.</div>
+        </div>
+      </details>
+
       <section id="open-trades-sec">
         <h2>Open Trades (<span id="open-count">0</span>)</h2>
         <div id="open-trades-grid" class="cards-grid">

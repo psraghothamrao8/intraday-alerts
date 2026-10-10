@@ -134,16 +134,20 @@ function renderDashboard(state) {
   // Scoreboard
   const scoreboard = state.scoreboard || [];
   const sbTbody = document.getElementById('scoreboard-tbody');
-  sbTbody.innerHTML = scoreboard.map(s => `
-    <tr>
-      <td><strong>${s.strategy}</strong> <span style="font-size:0.75rem; color:var(--text-muted);">(${s.name})</span></td>
-      <td>${s.n_30d}</td>
-      <td>${Math.round((s.win_rate_30d || 0) * 100)}%</td>
-      <td style="color:${s.avg_net_pct_30d >= 0 ? 'var(--green)' : 'var(--red)'}">${s.avg_net_pct_30d >= 0 ? '+' : ''}${s.avg_net_pct_30d}%</td>
-      <td style="color:${s.sum_net_pct_30d >= 0 ? 'var(--green)' : 'var(--red)'}">${s.sum_net_pct_30d >= 0 ? '+' : ''}${s.sum_net_pct_30d}%</td>
-      <td style="letter-spacing:2px;">${(s.last10 || '').replace(/W/g, '●').replace(/L/g, '○')}</td>
-    </tr>
-  `).join('');
+  if (scoreboard.length === 0) {
+    sbTbody.innerHTML = '<tr><td colspan="6" class="empty-state">No 30-day historical trades yet. Updates after live sessions or replay.</td></tr>';
+  } else {
+    sbTbody.innerHTML = scoreboard.map(s => `
+      <tr>
+        <td><strong>${s.strategy}</strong> <span style="font-size:0.75rem; color:var(--text-muted);">(${s.name})</span></td>
+        <td>${s.n_30d}</td>
+        <td>${Math.round((s.win_rate_30d || 0) * 100)}%</td>
+        <td style="color:${s.avg_net_pct_30d >= 0 ? 'var(--green)' : 'var(--red)'}">${s.avg_net_pct_30d >= 0 ? '+' : ''}${s.avg_net_pct_30d}%</td>
+        <td style="color:${s.sum_net_pct_30d >= 0 ? 'var(--green)' : 'var(--red)'}">${s.sum_net_pct_30d >= 0 ? '+' : ''}${s.sum_net_pct_30d}%</td>
+        <td style="letter-spacing:2px;">${(s.last10 || '').replace(/W/g, '●').replace(/L/g, '○')}</td>
+      </tr>
+    `).join('');
+  }
 
   // Research S4
   if (state.research && state.research.S4) {
@@ -211,11 +215,11 @@ function renderTradeCard(t) {
         <span class="score-tag">${t.strategy} · ${t.strength}/10</span>
       </div>
       <div class="card-body">
-        <div class="card-field"><span>Entry Price</span><strong>${entryLvl}</strong></div>
-        <div class="card-field"><span>Thesis Stop</span><span>${thesisLvl}</span></div>
-        <div class="card-field"><span>Safety SL</span><span>${safetyLvl}</span></div>
+        <div class="card-field"><span>Entry Limit</span><strong>${entryLvl}</strong></div>
+        <div class="card-field"><span>Thesis Stop <small style="color:var(--text-muted);">(Soft exit)</small></span><span>${thesisLvl}</span></div>
+        <div class="card-field"><span>Safety SL <small style="color:var(--text-muted);">(Broker SL-M)</small></span><strong style="color:var(--red);">${safetyLvl}</strong></div>
         <div class="card-field"><span>Exit By</span><span>${t.exit_by || '-'}</span></div>
-        <div class="card-field"><span>Qty / Risk</span><span>${t.qty || '-'} (₹${t.risk_inr || '-'})</span></div>
+        <div class="card-field"><span>Qty / Risk</span><span>${t.qty || '-'} shares (risk ₹${t.risk_inr || '-'})</span></div>
       </div>
       <div class="card-footer">
         <span style="font-size:0.75rem; color:var(--text-muted);">${t.why || ''}</span>

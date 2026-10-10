@@ -51,6 +51,7 @@ class NotifyConfig(BaseModel):
     min_strength: int = 6
     human_delay_sec: int = 45
     daily_summary: bool = False
+    format: str = "standard"
     webpush: WebPushConfig = Field(default_factory=WebPushConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
 

@@ -28,6 +28,7 @@ notify:
   min_strength: 6
   human_delay_sec: 45           # used for paper fills
   daily_summary: false
+  format: standard              # standard (spec 04 §3) | simple (actionable step-by-step for beginners)
   webpush: { enabled: true, ttl_entry_sec: 180, ttl_exit_sec: 3600, ttl_alert_sec: 3600 }
   telegram: { enabled: false }
 

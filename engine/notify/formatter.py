@@ -59,9 +59,10 @@ def format_pct(val: float | None, decimals: int = 1, show_sign: bool = True) -> 
     return f"{abs_str}%"
 
 
-def format_entry(trade: Dict[str, Any]) -> Tuple[str, str]:
+def format_entry(trade: Dict[str, Any], simple: bool = False) -> Tuple[str, str]:
     """
     Format an ENTRY notification (title, body) matching spec 04 §3.
+    When simple=True, provides an intuitive numbered step-by-step format for beginners.
     """
     symbol = trade.get("symbol", "")
     side = trade.get("side", "LONG").upper()
@@ -77,6 +78,54 @@ def format_entry(trade: Dict[str, Any]) -> Tuple[str, str]:
             title = f"🟢 BUY {symbol}{strength_str}"
     else:
         title = f"🔻 SHORT {symbol}{strength_str}"
+
+    if simple:
+        # Intuitive step-by-step format
+        lines = []
+        max_entry = trade.get("max_entry")
+        valid_till = trade.get("valid_till")
+        qty = trade.get("qty")
+        risk_inr = trade.get("risk_inr")
+
+        entry_part = f"≤ {format_inr(max_entry, decimals=2)}" if max_entry is not None else ""
+        if side == "SHORT":
+            entry_part = f"≥ {format_inr(max_entry, decimals=2)}" if max_entry is not None else ""
+
+        val_part = f"(valid {valid_till})" if valid_till else ""
+        qty_part = f"· Qty {qty}" if qty is not None else ""
+        if risk_inr is not None:
+            qty_part += f" (risk {format_inr(risk_inr, decimals=0)})"
+
+        if product == "CNC":
+            lines.append(f"1. Buy CNC {entry_part} {val_part} {qty_part}".strip())
+        elif side == "SHORT":
+            lines.append(f"1. Sell MIS {entry_part} {val_part} {qty_part}".strip())
+        else:
+            lines.append(f"1. Buy MIS {entry_part} {val_part} {qty_part}".strip())
+
+        safety_stop = trade.get("safety_stop")
+        if safety_stop is not None:
+            sl_str = format_inr(safety_stop, decimals=2)
+            if side == "SHORT":
+                lines.append(f"2. Safety Stop: {sl_str} (put SL-M BUY order in broker now)")
+            else:
+                lines.append(f"2. Safety Stop: {sl_str} (put SL-M order in broker now)")
+
+        exit_by = trade.get("exit_by")
+        thesis = trade.get("thesis")
+        if exit_by:
+            if thesis and thesis.get("level") is not None:
+                lvl_str = format_inr(thesis["level"], decimals=2)
+                lines.append(f"3. Exit by {exit_by} (or if 5-min candle breaks {lvl_str})")
+            else:
+                lines.append(f"3. Exit by {exit_by} (wait for SELL alert)")
+
+        why = trade.get("why")
+        if why:
+            lines.append(f"Why: {why}")
+
+        body = "\n".join(lines)
+        return title, body
 
     lines = []
 
@@ -144,9 +193,10 @@ def format_entry(trade: Dict[str, Any]) -> Tuple[str, str]:
     return title, body
 
 
-def format_exit(trade: Dict[str, Any]) -> Tuple[str, str]:
+def format_exit(trade: Dict[str, Any], simple: bool = False) -> Tuple[str, str]:
     """
     Format an EXIT notification (title, body) matching spec 04 §3.
+    When simple=True, provides an intuitive numbered step-by-step format for beginners.
     """
     symbol = trade.get("symbol", "")
     side = trade.get("side", "LONG").upper()
@@ -159,29 +209,43 @@ def format_exit(trade: Dict[str, Any]) -> Tuple[str, str]:
 
     lines = []
 
-    # Line 1: Exit reason
     exit_reason = trade.get("exit_reason")
-    if exit_reason:
-        lines.append(exit_reason)
-
-    # Line 2: Paper result
     paper_net_pct = trade.get("paper_net_pct")
     paper_entry = trade.get("paper_entry")
     exit_price = trade.get("exit_price")
     qty = trade.get("qty", 1)
 
-    if paper_net_pct is not None:
-        pct_str = format_pct(paper_net_pct, decimals=1, show_sign=True)
-        # Compute or use paper P&L in INR
-        paper_pnl_inr = trade.get("paper_pnl_inr")
-        if paper_pnl_inr is None and paper_entry is not None and exit_price is not None:
-            if side == "SHORT":
-                paper_pnl_inr = (paper_entry - exit_price) * qty
-            else:
-                paper_pnl_inr = (exit_price - paper_entry) * qty
+    # Compute paper P&L
+    paper_pnl_inr = trade.get("paper_pnl_inr")
+    if paper_pnl_inr is None and paper_entry is not None and exit_price is not None:
+        if side == "SHORT":
+            paper_pnl_inr = (paper_entry - exit_price) * qty
+        else:
+            paper_pnl_inr = (exit_price - paper_entry) * qty
 
+    pct_str = format_pct(paper_net_pct, decimals=1, show_sign=True) if paper_net_pct is not None else ""
+    pnl_inr_str = format_inr(paper_pnl_inr, decimals=0, show_sign=True) if paper_pnl_inr is not None else ""
+
+    if simple:
+        if exit_reason:
+            lines.append(f"1. Reason: {exit_reason}")
+        if pct_str:
+            res_str = f"{pct_str} ({pnl_inr_str})" if pnl_inr_str else pct_str
+            lines.append(f"2. Result: {res_str}")
+        if side == "SHORT":
+            lines.append("3. Action: Buy back in broker & cancel safety SL-buy order.")
+        else:
+            lines.append("3. Action: Sell in broker & cancel safety SL order.")
+        body = "\n".join(lines)
+        return title, body
+
+    # Line 1: Exit reason
+    if exit_reason:
+        lines.append(exit_reason)
+
+    # Line 2: Paper result
+    if paper_net_pct is not None:
         if paper_pnl_inr is not None:
-            pnl_inr_str = format_inr(paper_pnl_inr, decimals=0, show_sign=True)
             lines.append(f"Paper result: {pct_str} ({pnl_inr_str})")
         else:
             lines.append(f"Paper result: {pct_str}")
