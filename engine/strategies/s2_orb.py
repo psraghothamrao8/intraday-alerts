@@ -325,6 +325,7 @@ class S2OrbStrategy(Strategy):
             or_low=setup.or_low,
             atr14=setup.atr14,
             is_fno=is_fno,
+            entry_price=entry_price,
         )
 
         # 3. Why notification text

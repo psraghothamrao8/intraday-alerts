@@ -58,6 +58,7 @@ def compute_orb_exits(
     or_low: float,
     atr14: float,
     is_fno: bool = False,
+    entry_price: Optional[float] = None,
 ) -> Tuple[float, float, Optional[str], str]:
     """
     Computes ORB Exit Template (S2) per spec 03 §4.2:
@@ -65,14 +66,24 @@ def compute_orb_exits(
     """
     is_long = side.upper() == "LONG"
     atr = max(0.5, atr14)
+    settings = get_settings()
+    max_safety_loss_pct = getattr(settings.exits.orb, "max_safety_loss_pct", 1.25)
 
     if is_long:
         thesis_level = round_tick(or_low)
         safety_raw = or_low - 0.25 * atr
+        ref = entry_price or or_high
+        if max_safety_loss_pct > 0 and ref > 0:
+            max_sl = ref * (1.0 - max_safety_loss_pct / 100.0)
+            safety_raw = max(safety_raw, max_sl)
         safety_stop = avoid_round_numbers(safety_raw, side="LONG")
     else:
         thesis_level = round_tick(or_high)
         safety_raw = or_high + 0.25 * atr
+        ref = entry_price or or_low
+        if max_safety_loss_pct > 0 and ref > 0:
+            min_sl = ref * (1.0 + max_safety_loss_pct / 100.0)
+            safety_raw = min(safety_raw, min_sl)
         safety_stop = avoid_round_numbers(safety_raw, side="SHORT")
 
     exit_dt = last_exit_time(symbol, is_fno=is_fno)

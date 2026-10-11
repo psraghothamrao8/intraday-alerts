@@ -65,7 +65,7 @@ For a LONG (mirror everything for a SHORT):
 | Exit | Rule |
 |---|---|
 | Thesis stop | 5-minute close **below the opening-range low** (the far side of the range): the breakout has fully failed |
-| Safety stop | `OR_low − 0.25 × ATR14`, then the round-number rule |
+| Safety stop | `OR_low − 0.25 × ATR14` (capped at maximum `max_safety_loss_pct`, default 1.25% from entry), then the round-number rule |
 | Profit lock | **Off** by default. The published US version held to the close and made its money on trend days. Backtest variant: after +1R, exit on a 5-minute close below day VWAP |
 | Time exit | `last_exit_time(sym)` |
 

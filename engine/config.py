@@ -185,6 +185,7 @@ class OrbExitConfig(BaseModel):
     thesis: str = "or_far_close"
     safety_buffer_atr: float = 0.25
     profit_lock: str = "off"
+    max_safety_loss_pct: float = 1.25
 
     @model_validator(mode="before")
     @classmethod
