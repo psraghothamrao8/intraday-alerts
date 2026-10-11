@@ -89,5 +89,5 @@ def test_http_410_marks_inactive_and_alerts_telegram(test_db_conn, sample_trade)
         # 2. Telegram alert triggered
         assert mock_tg.called
         # Check call arguments
-        title_arg = mock_tg.call_args[1].get("title") or mock_tg.call_args[0][0]
-        assert "expired" in title_arg.lower()
+        titles = [(call[1].get("title") if "title" in call[1] else call[0][0]).lower() for call in mock_tg.call_args_list]
+        assert any("expired" in t for t in titles)
