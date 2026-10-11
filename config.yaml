@@ -90,6 +90,7 @@ strategies:
     entry_until: "11:00"
     max_trades_per_day: 3
     exit: orb                   # template in spec 03 §4.2
+    align_with_nifty: true      # Directional Benchmark Gate: filter setups fighting benchmark
 
   s3_filing_flash:
     enabled: true

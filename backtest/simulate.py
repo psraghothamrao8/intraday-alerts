@@ -256,7 +256,33 @@ class SimulationEngine:
                     )
                     s2_strat.on_candle_5m(c5)
 
-            s2_strat.compute_ranking()
+            # Determine 09:15-09:20 benchmark direction (Directional Benchmark Gate)
+            nifty_5m_dir: Optional[str] = None
+            for bench_key in ("NIFTY", "NIFTY 50", "RELIANCE"):
+                if bench_key in candles_by_sym:
+                    b_rows = candles_by_sym[bench_key]
+                    bm5 = b_rows[(b_rows["ts_dt"].dt.time >= time(9, 15)) & (b_rows["ts_dt"].dt.time < time(9, 20))]
+                    if not bm5.empty:
+                        b_open = float(bm5.iloc[0]["open"])
+                        b_close = float(bm5.iloc[-1]["close"])
+                        if b_close > b_open:
+                            nifty_5m_dir = "LONG"
+                        elif b_close < b_open:
+                            nifty_5m_dir = "SHORT"
+                        break
+
+            # Fallback to market breadth across liquid universe if benchmark was flat or missing
+            if nifty_5m_dir is None and s2_strat.or_candles:
+                up_cnt = sum(1 for c in s2_strat.or_candles.values() if c.close > c.open)
+                dn_cnt = sum(1 for c in s2_strat.or_candles.values() if c.close < c.open)
+                tot = up_cnt + dn_cnt
+                if tot > 0:
+                    if up_cnt / tot >= 0.52:
+                        nifty_5m_dir = "LONG"
+                    elif dn_cnt / tot >= 0.52:
+                        nifty_5m_dir = "SHORT"
+
+            s2_strat.compute_ranking(nifty_5m_dir=nifty_5m_dir)
 
             # Feed 1m candles between 09:21 and 11:00
             for ts in timestamps:

@@ -58,6 +58,7 @@ class S2OrbStrategy(Strategy):
         self.triggered_symbols: Set[str] = set()
         self.daily_entries: int = 0
         self.ranking_done: bool = False
+        self.nifty_5m_dir: Optional[str] = None
 
     def on_start(self, universe_df: pd.DataFrame) -> None:
         """Filter eligible symbols nightly and reset day state."""
@@ -68,6 +69,7 @@ class S2OrbStrategy(Strategy):
         self.triggered_symbols.clear()
         self.daily_entries = 0
         self.ranking_done = False
+        self.nifty_5m_dir = None
 
         for sym, u in self.universe_map.items():
             if not u.get("mis_allowed", True):
@@ -89,6 +91,10 @@ class S2OrbStrategy(Strategy):
     def set_catalyst_symbols(self, symbols: Set[str]) -> None:
         """Set symbols that had exchange filings since previous close."""
         self.catalyst_symbols = set(symbols)
+
+    def set_nifty_direction(self, direction: Optional[str]) -> None:
+        """Set Nifty benchmark 5m direction ('LONG', 'SHORT', or None)."""
+        self.nifty_5m_dir = direction
 
     async def on_filing(self, filing: Dict[str, Any], current_price: Optional[float] = None, **kwargs) -> Optional[Signal]:
         """Track filings as catalysts for S2 stocks."""
@@ -117,6 +123,21 @@ class S2OrbStrategy(Strategy):
         Rank eligible symbols at 09:20:02 by RVOL and build top 20 setups.
         Per spec 02 §S2.2-S2.5.
         """
+        if nifty_5m_dir is not None:
+            self.nifty_5m_dir = nifty_5m_dir
+        effective_nifty_dir = self.nifty_5m_dir
+
+        # Auto-detect benchmark direction from NIFTY or RELIANCE proxy if not passed explicitly
+        if effective_nifty_dir is None and self.cfg.align_with_nifty:
+            for proxy_key in ("NIFTY", "NIFTY 50", "RELIANCE"):
+                if proxy_key in self.or_candles:
+                    pc = self.or_candles[proxy_key]
+                    if pc.close > pc.open:
+                        effective_nifty_dir = "LONG"
+                    elif pc.close < pc.open:
+                        effective_nifty_dir = "SHORT"
+                    break
+
         candidates: List[dict] = []
 
         for sym, candle in self.or_candles.items():
@@ -178,6 +199,12 @@ class S2OrbStrategy(Strategy):
             if or_range > self.cfg.max_or_range_atr * atr14:
                 continue
 
+            # Directional Benchmark Gate: if align_with_nifty is enabled and benchmark
+            # direction is known, filter out setups that fight the market trend
+            if self.cfg.align_with_nifty and effective_nifty_dir:
+                if side != effective_nifty_dir:
+                    continue
+
             # Gap %
             gap_pct = ((c.open / prev_close) - 1.0) * 100.0
             has_catalyst = sym in self.catalyst_symbols
@@ -199,7 +226,7 @@ class S2OrbStrategy(Strategy):
             elif side == "SHORT" and gap_pct <= -1.0:
                 str_score += 1
 
-            if nifty_5m_dir == side:
+            if effective_nifty_dir == side:
                 str_score += 1
 
             if or_range > 0.4 * atr14:

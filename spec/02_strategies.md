@@ -194,6 +194,7 @@ Common filters + `ADV_cr ≥ 10` + previous close ≥ ₹50 + `ATR% ≥ 1%`.
 ### S2.3 Setup per stock
 - C > O → **LONG** setup, `trigger = H`. C < O → **SHORT** setup (only if shortable), `trigger = L`. C == O → skip.
 - Skip if the opening range (H − L) > 0.6 × ATR14. The stop would be too wide and the move may be done already.
+- **Directional Benchmark Gate (`align_with_nifty: true`):** If benchmark 5m candle or breadth direction is known, only admit setups pointing in the same direction (`setup.side == nifty_5m_dir`). Prevents taking counter-trend longs on down days (which empirically lose 87.5% of the time) and counter-trend shorts on rally days.
 
 ### S2.4 Trigger (09:21 to `orb.entry_until`, default 11:00)
 - LONG: a **completed 1-minute candle closes above `trigger`** (close-confirmation; the backtest also tests "first touch").

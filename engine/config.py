@@ -118,6 +118,7 @@ class S2OrbConfig(BaseModel):
     entry_until: str = "11:00"
     max_trades_per_day: int = 3
     exit: str = "orb"
+    align_with_nifty: bool = True
 
 
 class SerialAnnouncerConfig(BaseModel):

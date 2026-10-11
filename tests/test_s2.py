@@ -195,3 +195,46 @@ def test_s2_orb_exits_levels():
     assert profit_lock is None
     # Exit by is 15:07 for F&O (15:12 - 5 min buffer)
     assert exit_by == "15:07"
+
+
+def test_s2_directional_benchmark_gate():
+    """Verify that Directional Benchmark Gate filters out setups fighting the market trend."""
+    strat = S2OrbStrategy()
+    df = pd.DataFrame([
+        {"symbol": "UP_STOCK", "series": "EQ", "mis_allowed": True, "asm_stage": 0, "gsm": False,
+         "adv_cr": 20.0, "prev_close": 100.0, "atr_pct": 2.0, "atr14": 5.0, "or_vol_avg14": 1000.0, "fno": True},
+        {"symbol": "DN_STOCK", "series": "EQ", "mis_allowed": True, "asm_stage": 0, "gsm": False,
+         "adv_cr": 20.0, "prev_close": 100.0, "atr_pct": 2.0, "atr14": 5.0, "or_vol_avg14": 1000.0, "fno": True},
+    ])
+    strat.on_start(df)
+
+    # UP_STOCK: C > O (LONG)
+    strat.on_candle_5m(make_candle("UP_STOCK", 9, 20, 100.0, 102.0, 100.0, 101.5, 3000))
+    # DN_STOCK: C < O (SHORT)
+    strat.on_candle_5m(make_candle("DN_STOCK", 9, 20, 100.0, 100.5, 98.5, 99.0, 3000))
+
+    # Case 1: Market is SHORT -> only DN_STOCK admitted
+    setups_short = strat.compute_ranking(nifty_5m_dir="SHORT")
+    assert len(setups_short) == 1
+    assert setups_short[0].symbol == "DN_STOCK"
+    assert setups_short[0].side == "SHORT"
+
+    # Reset day and re-feed candles
+    strat.on_start(df)
+    strat.on_candle_5m(make_candle("UP_STOCK", 9, 20, 100.0, 102.0, 100.0, 101.5, 3000))
+    strat.on_candle_5m(make_candle("DN_STOCK", 9, 20, 100.0, 100.5, 98.5, 99.0, 3000))
+
+    # Case 2: Market is LONG -> only UP_STOCK admitted
+    setups_long = strat.compute_ranking(nifty_5m_dir="LONG")
+    assert len(setups_long) == 1
+    assert setups_long[0].symbol == "UP_STOCK"
+    assert setups_long[0].side == "LONG"
+
+    # Reset day and re-feed candles
+    strat.on_start(df)
+    strat.on_candle_5m(make_candle("UP_STOCK", 9, 20, 100.0, 102.0, 100.0, 101.5, 3000))
+    strat.on_candle_5m(make_candle("DN_STOCK", 9, 20, 100.0, 100.5, 98.5, 99.0, 3000))
+
+    # Case 3: nifty_5m_dir is None -> both admitted (neutral fallback)
+    setups_neutral = strat.compute_ranking(nifty_5m_dir=None)
+    assert len(setups_neutral) == 2

@@ -488,7 +488,22 @@ class AlertBotEngine:
                             except Exception as e:
                                 logger.debug(f"Could not load 5m candle for {sym}: {e}")
 
-                        self.s2_orb.compute_ranking()
+                        nifty_dir = None
+                        try:
+                            for b_sym in ("NIFTY 50", "NIFTY", "RELIANCE"):
+                                df_b = await broker.intraday_candles(b_sym, interval="5minute")
+                                if not df_b.empty:
+                                    b_o = float(df_b.iloc[0]["open"])
+                                    b_c = float(df_b.iloc[0]["close"])
+                                    if b_c > b_o:
+                                        nifty_dir = "LONG"
+                                    elif b_c < b_o:
+                                        nifty_dir = "SHORT"
+                                    break
+                        except Exception as e:
+                            logger.debug(f"Could not determine live benchmark direction: {e}")
+
+                        self.s2_orb.compute_ranking(nifty_5m_dir=nifty_dir)
 
                     # 2. Check open trades prices
                     if self.open_trades:
