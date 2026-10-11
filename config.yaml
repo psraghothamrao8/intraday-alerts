@@ -25,7 +25,7 @@ risk:
   pause_if_drawdown_x_backtest: 2.0
 
 notify:
-  min_strength: 6
+  min_strength: 7               # Raised to 7 to filter out low-conviction setups and boost win rate
   human_delay_sec: 45           # used for paper fills
   daily_summary: false
   format: standard              # standard (spec 04 §3) | simple (actionable step-by-step for beginners)
