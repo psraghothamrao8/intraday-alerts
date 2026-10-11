@@ -238,3 +238,29 @@ def test_s2_directional_benchmark_gate():
     # Case 3: nifty_5m_dir is None -> both admitted (neutral fallback)
     setups_neutral = strat.compute_ranking(nifty_5m_dir=None)
     assert len(setups_neutral) == 2
+
+
+def test_s2_dual_bellwether_concordance():
+    """Verify Dual-Bellwether Concordance detection between Reliance and HDFC Bank."""
+    strat = S2OrbStrategy()
+    df = pd.DataFrame([
+        {"symbol": "RELIANCE", "series": "EQ", "mis_allowed": True, "asm_stage": 0, "gsm": False,
+         "adv_cr": 50.0, "prev_close": 2500.0, "atr_pct": 2.0, "atr14": 50.0, "or_vol_avg14": 1000.0, "fno": True},
+        {"symbol": "HDFCBANK", "series": "EQ", "mis_allowed": True, "asm_stage": 0, "gsm": False,
+         "adv_cr": 50.0, "prev_close": 1600.0, "atr_pct": 2.0, "atr14": 30.0, "or_vol_avg14": 1000.0, "fno": True},
+        {"symbol": "TARGET_SYM", "series": "EQ", "mis_allowed": True, "asm_stage": 0, "gsm": False,
+         "adv_cr": 20.0, "prev_close": 500.0, "atr_pct": 2.0, "atr14": 10.0, "or_vol_avg14": 1000.0, "fno": True},
+    ])
+    strat.on_start(df)
+
+    # 1. Both Reliance and HDFC Bank are green (C > O)
+    strat.on_candle_5m(make_candle("RELIANCE", 9, 20, 2500.0, 2520.0, 2495.0, 2515.0, 5000))
+    strat.on_candle_5m(make_candle("HDFCBANK", 9, 20, 1600.0, 1610.0, 1598.0, 1608.0, 5000))
+    strat.on_candle_5m(make_candle("TARGET_SYM", 9, 20, 500.0, 503.0, 499.0, 502.0, 3000))
+
+    setups = strat.compute_ranking()
+    target_setups = [s for s in setups if s.symbol == "TARGET_SYM"]
+    assert len(target_setups) == 1
+    assert target_setups[0].side == "LONG"
+    # Concordant bonus applied: base 5 + RVOL>=3 (+1) + rank<=5 (+1) + dir==LONG (+1) + concordant (+1) = 9
+    assert target_setups[0].strength >= 8

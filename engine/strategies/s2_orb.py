@@ -127,7 +127,19 @@ class S2OrbStrategy(Strategy):
             self.nifty_5m_dir = nifty_5m_dir
         effective_nifty_dir = self.nifty_5m_dir
 
-        # Auto-detect benchmark direction from NIFTY or RELIANCE proxy if not passed explicitly
+        # Check bellwether concordance (Reliance ~10.2% and HDFC Bank ~11.5%)
+        is_concordant = False
+        if "RELIANCE" in self.or_candles and "HDFCBANK" in self.or_candles:
+            rc = self.or_candles["RELIANCE"]
+            hc = self.or_candles["HDFCBANK"]
+            r_dir = "LONG" if rc.close > rc.open else ("SHORT" if rc.close < rc.open else None)
+            h_dir = "LONG" if hc.close > hc.open else ("SHORT" if hc.close < hc.open else None)
+            if r_dir == h_dir and r_dir is not None:
+                is_concordant = True
+                if effective_nifty_dir is None and self.cfg.align_with_nifty:
+                    effective_nifty_dir = r_dir
+
+        # Auto-detect benchmark direction from NIFTY or proxies if still not determined
         if effective_nifty_dir is None and self.cfg.align_with_nifty:
             for proxy_key in ("NIFTY", "NIFTY 50", "RELIANCE"):
                 if proxy_key in self.or_candles:
@@ -228,6 +240,8 @@ class S2OrbStrategy(Strategy):
 
             if effective_nifty_dir == side:
                 str_score += 1
+                if is_concordant:
+                    str_score += 1
 
             if or_range > 0.4 * atr14:
                 str_score -= 1
