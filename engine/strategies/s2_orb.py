@@ -127,17 +127,36 @@ class S2OrbStrategy(Strategy):
             self.nifty_5m_dir = nifty_5m_dir
         effective_nifty_dir = self.nifty_5m_dir
 
-        # Check bellwether concordance (Reliance ~10.2% and HDFC Bank ~11.5%)
+        # Check B5 Heavyweight Institutional Consensus Basket (~40% of Nifty 50):
+        # RELIANCE (~10.2%), HDFCBANK (~11.5%), ICICIBANK (~8.0%), INFY (~6.0%), TCS (~4.2%)
+        b5_keys = ["RELIANCE", "HDFCBANK", "ICICIBANK", "INFY", "TCS"]
+        b5_scores = []
+        for b_sym in b5_keys:
+            if b_sym in self.or_candles:
+                bc = self.or_candles[b_sym]
+                if bc.close > bc.open:
+                    b5_scores.append(1)
+                elif bc.close < bc.open:
+                    b5_scores.append(-1)
+                else:
+                    b5_scores.append(0)
+
         is_concordant = False
-        if "RELIANCE" in self.or_candles and "HDFCBANK" in self.or_candles:
-            rc = self.or_candles["RELIANCE"]
-            hc = self.or_candles["HDFCBANK"]
-            r_dir = "LONG" if rc.close > rc.open else ("SHORT" if rc.close < rc.open else None)
-            h_dir = "LONG" if hc.close > hc.open else ("SHORT" if hc.close < hc.open else None)
-            if r_dir == h_dir and r_dir is not None:
+        if len(b5_scores) >= 2:
+            net_b5 = sum(b5_scores)
+            # Concordance if 2 present and both agree, or >= 3 present with clear >= 2 majority
+            if (len(b5_scores) == 2 and net_b5 == 2) or (len(b5_scores) >= 3 and net_b5 >= 2):
                 is_concordant = True
                 if effective_nifty_dir is None and self.cfg.align_with_nifty:
-                    effective_nifty_dir = r_dir
+                    effective_nifty_dir = "LONG"
+            elif (len(b5_scores) == 2 and net_b5 == -2) or (len(b5_scores) >= 3 and net_b5 <= -2):
+                is_concordant = True
+                if effective_nifty_dir is None and self.cfg.align_with_nifty:
+                    effective_nifty_dir = "SHORT"
+            elif net_b5 > 0 and effective_nifty_dir is None and self.cfg.align_with_nifty:
+                effective_nifty_dir = "LONG"
+            elif net_b5 < 0 and effective_nifty_dir is None and self.cfg.align_with_nifty:
+                effective_nifty_dir = "SHORT"
 
         # Auto-detect benchmark direction from NIFTY or proxies if still not determined
         if effective_nifty_dir is None and self.cfg.align_with_nifty:

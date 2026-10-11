@@ -264,3 +264,40 @@ def test_s2_dual_bellwether_concordance():
     assert target_setups[0].side == "LONG"
     # Concordant bonus applied: base 5 + RVOL>=3 (+1) + rank<=5 (+1) + dir==LONG (+1) + concordant (+1) = 9
     assert target_setups[0].strength >= 8
+
+
+def test_s2_b5_heavyweight_consensus():
+    """Verify B5 Heavyweight Basket reaches consensus even when Reliance and HDFC Bank diverge."""
+    strat = S2OrbStrategy()
+    df = pd.DataFrame([
+        {"symbol": "RELIANCE", "series": "EQ", "mis_allowed": True, "asm_stage": 0, "gsm": False,
+         "adv_cr": 50.0, "prev_close": 2500.0, "atr_pct": 2.0, "atr14": 50.0, "or_vol_avg14": 1000.0, "fno": True},
+        {"symbol": "HDFCBANK", "series": "EQ", "mis_allowed": True, "asm_stage": 0, "gsm": False,
+         "adv_cr": 50.0, "prev_close": 1600.0, "atr_pct": 2.0, "atr14": 30.0, "or_vol_avg14": 1000.0, "fno": True},
+        {"symbol": "ICICIBANK", "series": "EQ", "mis_allowed": True, "asm_stage": 0, "gsm": False,
+         "adv_cr": 50.0, "prev_close": 1200.0, "atr_pct": 2.0, "atr14": 20.0, "or_vol_avg14": 1000.0, "fno": True},
+        {"symbol": "INFY", "series": "EQ", "mis_allowed": True, "asm_stage": 0, "gsm": False,
+         "adv_cr": 50.0, "prev_close": 1800.0, "atr_pct": 2.0, "atr14": 25.0, "or_vol_avg14": 1000.0, "fno": True},
+        {"symbol": "TCS", "series": "EQ", "mis_allowed": True, "asm_stage": 0, "gsm": False,
+         "adv_cr": 50.0, "prev_close": 3500.0, "atr_pct": 2.0, "atr14": 40.0, "or_vol_avg14": 1000.0, "fno": True},
+        {"symbol": "TARGET_SYM", "series": "EQ", "mis_allowed": True, "asm_stage": 0, "gsm": False,
+         "adv_cr": 20.0, "prev_close": 500.0, "atr_pct": 2.0, "atr14": 10.0, "or_vol_avg14": 1000.0, "fno": True},
+    ])
+    strat.on_start(df)
+
+    # RELIANCE is green (+1), HDFCBANK is red (-1), but ICICIBANK (+1), INFY (+1), TCS (+1) are all green!
+    # Net B5 score = +1 - 1 + 1 + 1 + 1 = +3 (Strong Bull Consensus!)
+    strat.on_candle_5m(make_candle("RELIANCE", 9, 20, 2500.0, 2520.0, 2495.0, 2515.0, 5000))
+    strat.on_candle_5m(make_candle("HDFCBANK", 9, 20, 1610.0, 1610.0, 1598.0, 1600.0, 5000)) # RED
+    strat.on_candle_5m(make_candle("ICICIBANK", 9, 20, 1200.0, 1210.0, 1195.0, 1208.0, 5000)) # GREEN
+    strat.on_candle_5m(make_candle("INFY", 9, 20, 1800.0, 1815.0, 1795.0, 1810.0, 5000))      # GREEN
+    strat.on_candle_5m(make_candle("TCS", 9, 20, 3500.0, 3520.0, 3495.0, 3515.0, 5000))       # GREEN
+    strat.on_candle_5m(make_candle("TARGET_SYM", 9, 20, 500.0, 503.0, 499.0, 502.0, 3000))
+
+    setups = strat.compute_ranking()
+    target_setups = [s for s in setups if s.symbol == "TARGET_SYM"]
+    assert len(target_setups) == 1
+    assert target_setups[0].side == "LONG"
+    # Concordant bonus applied: base 5 + RVOL>=3 (+1) + rank<=5 (+1) + dir==LONG (+1) + concordant (+1) = 9
+    assert target_setups[0].strength >= 8
+

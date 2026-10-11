@@ -195,6 +195,7 @@ Common filters + `ADV_cr ≥ 10` + previous close ≥ ₹50 + `ATR% ≥ 1%`.
 - C > O → **LONG** setup, `trigger = H`. C < O → **SHORT** setup (only if shortable), `trigger = L`. C == O → skip.
 - Skip if the opening range (H − L) > 0.6 × ATR14. The stop would be too wide and the move may be done already.
 - **Directional Benchmark Gate (`align_with_nifty: true`):** If benchmark 5m candle or breadth direction is known, only admit setups pointing in the same direction (`setup.side == nifty_5m_dir`). Prevents taking counter-trend longs on down days (which empirically lose 87.5% of the time) and counter-trend shorts on rally days.
+- **B5 Heavyweight Institutional Consensus Basket (~40% of Nifty 50):** Automatically computes net opening consensus across Reliance, HDFC Bank, ICICI Bank, Infosys, and TCS. If 2 are present and both agree, or $\ge 3$ are present with a net majority score $\ge 2$ or $\le -2$, consensus is locked (`is_concordant = True`), setting market direction and granting an institutional concordance strength bonus.
 
 ### S2.4 Trigger (09:21 to `orb.entry_until`, default 11:00)
 - LONG: a **completed 1-minute candle closes above `trigger`** (close-confirmation; the backtest also tests "first touch").
@@ -203,7 +204,7 @@ Common filters + `ADV_cr ≥ 10` + previous close ≥ ₹50 + `ATR% ≥ 1%`.
 - At most `orb.max_trades_per_day` (3) entries, first come first served among setups with strength ≥ min_strength. One per symbol.
 
 ### S2.5 Provisional strength
-Base 5. +1 if RVOL ≥ 3. +1 if RVOL rank ≤ 5. +1 if the symbol has an exchange filing since the previous close (catalyst, from the filings DB). +1 if the opening gap is ≥ 1% in the trade's direction. +1 if Nifty 50's first 5-minute candle points the same way. −1 if the opening range > 0.4 × ATR14. Clamp to 1–10.
+Base 5. +1 if RVOL ≥ 3. +1 if RVOL rank ≤ 5. +1 if the symbol has an exchange filing since the previous close (catalyst, from the filings DB). +1 if the opening gap is ≥ 1% in the trade's direction. +1 if Nifty 50's first 5-minute candle points the same way. +1 if B5 Heavyweight Institutional Consensus is confirmed. −1 if the opening range > 0.4 × ATR14. Clamp to 1–10.
 
 ### S2.6 Exits
 **ORB exit template**, 03 §4.2.
