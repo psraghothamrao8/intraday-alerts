@@ -25,7 +25,7 @@ risk:
   pause_if_drawdown_x_backtest: 2.0
 
 notify:
-  min_strength: 8               # Raised to 8 to enforce Dual-Bellwether Concordance (100% historical win rate)
+  min_strength: 7               # Set to 7 for daily institutional setups (1-2 trades/day) with 1.25% hard stop
   human_delay_sec: 45           # used for paper fills
   daily_summary: false
   format: standard              # standard (spec 04 §3) | simple (actionable step-by-step for beginners)

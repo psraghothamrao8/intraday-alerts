@@ -505,7 +505,32 @@ class AlertBotEngine:
 
                         self.s2_orb.compute_ranking(nifty_5m_dir=nifty_dir)
 
-                    # 2. Check open trades prices
+                    # 2. Check S2 setup breakouts between 09:21 and 11:00
+                    if self.s2_orb.ranking_done and time(9, 21) <= cur_now.time() <= time(11, 0):
+                        pending_syms = [
+                            sym for sym in self.s2_orb.setups.keys()
+                            if sym not in self.s2_orb.triggered_symbols and sym not in [t.symbol for t in self.open_trades.values()]
+                        ][:15]
+                        for sym in pending_syms:
+                            try:
+                                df_1m = await broker.intraday_candles(sym, interval="1minute")
+                                if not df_1m.empty:
+                                    last_row = df_1m.iloc[-1]
+                                    ts_val = last_row["ts"]
+                                    c_1m = Candle(
+                                        symbol=sym,
+                                        timestamp=ts_val.to_pydatetime() if hasattr(ts_val, "to_pydatetime") else cur_now,
+                                        open=float(last_row["open"]),
+                                        high=float(last_row["high"]),
+                                        low=float(last_row["low"]),
+                                        close=float(last_row["close"]),
+                                        volume=int(last_row["volume"]),
+                                    )
+                                    self.step_candle_1m(c_1m)
+                            except Exception as e:
+                                logger.debug(f"Could not check 1m breakout for {sym}: {e}")
+
+                    # 3. Check open trades prices
                     if self.open_trades:
                         syms = list({t.symbol for t in self.open_trades.values()})
                         quotes = await broker.quotes(syms)
