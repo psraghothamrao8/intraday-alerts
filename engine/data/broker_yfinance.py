@@ -123,7 +123,14 @@ class YFinanceBroker:
     ) -> pd.DataFrame:
         """Download free 1m or 5m intraday candles."""
         yf_interval = "1m" if "1m" in interval.lower() else "5m"
-        ticker = f"{symbol}.NS"
+        if symbol in ("NIFTY", "NIFTY 50", "^NSEI"):
+            ticker = "^NSEI"
+        elif symbol in ("BANKNIFTY", "NIFTY BANK", "^NSEBANK"):
+            ticker = "^NSEBANK"
+        elif not symbol.endswith(".NS") and not symbol.startswith("^"):
+            ticker = f"{symbol}.NS"
+        else:
+            ticker = symbol
         try:
             loop = asyncio.get_running_loop()
             t = yf.Ticker(ticker)

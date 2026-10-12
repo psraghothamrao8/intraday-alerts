@@ -120,7 +120,7 @@ def cli_notify_test() -> None:
         "safety_stop": 1404.00,
         "qty": 41,
         "risk_inr": 1968,
-        "why": "Q2 results: Rev +28% · PAT +61% · margin +310bps (consol.)",
+        "why": "[SYNTHETIC TEST DEMO - DO NOT TRADE] Pipeline verification test",
         "status": "OPEN",
     }
 
